@@ -81,29 +81,7 @@ All scenarios are safely simulated using Python scripts and public endpoints.
 
 ---
 
-## 📁 Project Structure
 
-```
-byod-anomaly-detection/
-│
-├── data/
-│   ├── raw/              # PCAP files
-│   ├── processed/        # Feature datasets
-│
-├── scenarios/            # Traffic simulation scripts
-│
-├── src/
-│   ├── feature_engineering.py
-│   ├── model.py
-│   ├── evaluate.py
-│
-├── notebooks/            # Experiments
-├── results/              # Outputs & plots
-│
-└── main.py
-```
-
----
 
 ## 🚀 Goals
 
@@ -133,5 +111,5 @@ No real systems are exploited.
 
 ## 👥 Authors
 
-* Your Name
-* Partner Name
+* Miss Sarah Madiha Zarifi
+* Mr. Ritodip Dewry
