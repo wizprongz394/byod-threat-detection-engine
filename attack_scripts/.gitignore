@@ -1,0 +1,3 @@
+*.pcap
+*.txt
+__pycache__/
