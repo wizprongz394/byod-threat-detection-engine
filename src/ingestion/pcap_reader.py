@@ -6,7 +6,7 @@ def read_pcap(file_path):
     """
     capture = pyshark.FileCapture(file_path)
 
-    packets = []
+    packets =[]
 
     for pkt in capture:
         try:
