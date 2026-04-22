@@ -3,7 +3,7 @@ from src.processing.flow_builder import build_flows
 import json
 import os
 
-# 🔹 NEW: file input (CLI + GUI fallback)
+
 def get_file_path():
     path = input("Enter PCAP path (or press Enter to browse): ").strip()
 
@@ -15,16 +15,13 @@ def get_file_path():
         from tkinter.filedialog import askopenfilename
 
         Tk().withdraw()
-        file_path = askopenfilename(title="Select PCAP File")
-
-        return file_path
+        return askopenfilename(title="Select PCAP File")
 
     except Exception as e:
         print("[ERROR] File picker not available:", e)
         return None
 
 
-# 🔹 Get file path
 file_path = get_file_path()
 
 if not file_path or not os.path.exists(file_path):
@@ -32,62 +29,57 @@ if not file_path or not os.path.exists(file_path):
     exit()
 
 
-# 🔹 Extract attack type
-attack_type = file_path.split("/")[-1].split(".")[0]
+attack_type = os.path.basename(file_path).split(".")[0]
 
-# 🔹 Pipeline
+#The packets to flow pipeline
 packets = read_pcap(file_path)
-flows = build_flows(packets)
+print(f"Total packets: {len(packets)}")
 
+flows = build_flows(packets)
 print(f"Total flows: {len(flows)}")
 
 
-# 🔹 Convert flows to JSON
+#Converting to JSON
 flows_json = []
 
-for (key, flow_id), packet_list in flows.items():
-    src, dst = key
+for flow in flows:
+    (ip_pair, protocol, port_pair) = flow["key"]
+    src_ip, dst_ip = ip_pair
+    src_port, dst_port = port_pair
 
-    flow_start = {
+    flow_obj = {
         "attack_type": attack_type,
-        "flow_id": flow_id,
-        "src_ip": src,
-        "dst_ip": dst,
-        "packet_count": len(packet_list),
-        "packets": []
+        "flow_id": flow["flow_id"],
+        "src_ip": src_ip,
+        "dst_ip": dst_ip,
+        "protocol": protocol,
+        "src_port": src_port,
+        "dst_port": dst_port,
+        "packet_count": len(flow["packets"]),
+        "packets": flow["packets"]
     }
 
-    for timestamp, size in packet_list:
-        flow_start["packets"].append({
-            "timestamp": timestamp,
-            "size": size
-        })
-
-    flows_json.append(flow_start)
+    flows_json.append(flow_obj)
 
 
-# 🔹 Load existing file safely
+#output
 file_name = "flow_output.json"
 
 if os.path.exists(file_name):
     try:
         with open(file_name, "r") as f:
             existing_data = json.load(f)
-    except Exception:
+    except:
         existing_data = []
 else:
     existing_data = []
 
-
-# 🔹 Append new data
 existing_data.append({
     "attack_type": attack_type,
     "flow_count": len(flows_json),
     "flows": flows_json
 })
 
-
-# 🔹 Save output
 with open(file_name, "w") as f:
     json.dump(existing_data, f, indent=4)
 
