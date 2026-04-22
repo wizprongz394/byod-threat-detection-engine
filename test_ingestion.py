@@ -3,42 +3,92 @@ from src.processing.flow_builder import build_flows
 import json
 import os
 
-file_path="attack_pcaps/10_random.pcapng"
+# 🔹 NEW: file input (CLI + GUI fallback)
+def get_file_path():
+    path = input("Enter PCAP path (or press Enter to browse): ").strip()
+
+    if path:
+        return path
+
+    try:
+        from tkinter import Tk
+        from tkinter.filedialog import askopenfilename
+
+        Tk().withdraw()
+        file_path = askopenfilename(title="Select PCAP File")
+
+        return file_path
+
+    except Exception as e:
+        print("[ERROR] File picker not available:", e)
+        return None
+
+
+# 🔹 Get file path
+file_path = get_file_path()
+
+if not file_path or not os.path.exists(file_path):
+    print("[ERROR] Invalid file path")
+    exit()
+
+
+# 🔹 Extract attack type
+attack_type = file_path.split("/")[-1].split(".")[0]
+
+# 🔹 Pipeline
 packets = read_pcap(file_path)
-attack_type=file_path.split("/")[-1].split(".")[0]
 flows = build_flows(packets)
 
 print(f"Total flows: {len(flows)}")
 
-flows_json=[]
-for (src,dst), packet_list in flows.items():
-    flow_start={
-        "attack_type":attack_type,
-        "src_ip":src,
-        "dst_ip":dst,
-        "packet_count":len(packet_list),
-        "packets":[]
+
+# 🔹 Convert flows to JSON
+flows_json = []
+
+for (key, flow_id), packet_list in flows.items():
+    src, dst = key
+
+    flow_start = {
+        "attack_type": attack_type,
+        "flow_id": flow_id,
+        "src_ip": src,
+        "dst_ip": dst,
+        "packet_count": len(packet_list),
+        "packets": []
     }
-    for timestamp,size in packet_list:
+
+    for timestamp, size in packet_list:
         flow_start["packets"].append({
-            "timestamp":timestamp,
-            "size":size
+            "timestamp": timestamp,
+            "size": size
         })
+
     flows_json.append(flow_start)
-file_name="flow_output.json"
+
+
+# 🔹 Load existing file safely
+file_name = "flow_output.json"
+
 if os.path.exists(file_name):
     try:
-        with open(file_name,"r") as f:
-            existing_data=json.load(f)
-    except:
-        existing_data=[]
+        with open(file_name, "r") as f:
+            existing_data = json.load(f)
+    except Exception:
+        existing_data = []
 else:
-    existing_data=[]
+    existing_data = []
 
+
+# 🔹 Append new data
 existing_data.append({
-    "attack_type":attack_type,
-    "flows":flows_json
+    "attack_type": attack_type,
+    "flow_count": len(flows_json),
+    "flows": flows_json
 })
-with open("flow_output.json","w") as f:
-    json.dump(existing_data,f,indent=4)
-print("Flows have been saved to flow_output.json")
+
+
+# 🔹 Save output
+with open(file_name, "w") as f:
+    json.dump(existing_data, f, indent=4)
+
+print(f"[SUCCESS] Flows saved to {file_name}")
