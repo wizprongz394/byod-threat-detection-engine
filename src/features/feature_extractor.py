@@ -1,13 +1,21 @@
 import json
 import numpy as np
 import pandas as pd
+from scipy.stats import entropy
 
+
+
+from scipy.stats import entropy
+import numpy as np
 
 def compute_features(flow):
     packets = flow["packets"]
 
     timestamps = [p["timestamp"] for p in packets]
     sizes = [p["length"] for p in packets]
+
+    # 🔹 Packet size variance (V2)
+    size_variance = np.var(sizes) if len(sizes) > 1 else 0
 
     # 🔹 Basic features
     duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
@@ -18,14 +26,20 @@ def compute_features(flow):
     if len(timestamps) > 1:
         timestamps_sorted = sorted(timestamps)
         intervals = np.diff(timestamps_sorted)
+
         interval_mean = np.mean(intervals)
         interval_variance = np.var(intervals)
+
+        # 🔥 Interval entropy (V2)
+        hist, _ = np.histogram(intervals, bins=10)
+        interval_entropy = entropy(hist + 1e-6)
+
     else:
         interval_mean = 0
         interval_variance = 0
+        interval_entropy = 0
 
-    # 🔥 Derived features (V1 improvements)
-
+    # 🔹 Derived features (V1)
     bytes_per_packet = total_bytes / packet_count if packet_count > 0 else 0
 
     packets_per_second = (
@@ -36,11 +50,11 @@ def compute_features(flow):
         total_bytes / duration if duration > 0 else 0
     )
 
-    # 🔥 FINAL FEATURE
     burst_ratio = (
         interval_variance / interval_mean if interval_mean > 0 else 0
     )
 
+    # 🔹 Final feature vector
     return {
         "duration": duration,
         "total_bytes": total_bytes,
@@ -50,49 +64,9 @@ def compute_features(flow):
         "bytes_per_packet": bytes_per_packet,
         "packets_per_second": packets_per_second,
         "byte_rate": byte_rate,
-        "burst_ratio": burst_ratio
-    }
-    packets = flow["packets"]
-
-    timestamps = [p["timestamp"] for p in packets]
-    sizes = [p["length"] for p in packets]
-
-    # 🔹 Basic features
-    duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
-    total_bytes = sum(sizes)
-    packet_count = len(packets)
-
-    # 🔹 Time intervals
-    if len(timestamps) > 1:
-        timestamps_sorted = sorted(timestamps)
-        intervals = np.diff(timestamps_sorted)
-        interval_mean = np.mean(intervals)
-        interval_variance = np.var(intervals)
-    else:
-        interval_mean = 0
-        interval_variance = 0
-
-    # 🔥 NEW FEATURES
-
-    bytes_per_packet = total_bytes / packet_count if packet_count > 0 else 0
-
-    packets_per_second = (
-        packet_count / duration if duration > 0 else 0
-    )
-
-    byte_rate = (
-        total_bytes / duration if duration > 0 else 0
-    )
-
-    return {
-        "duration": duration,
-        "total_bytes": total_bytes,
-        "packet_count": packet_count,
-        "interval_mean": interval_mean,
-        "interval_variance": interval_variance,
-        "bytes_per_packet": bytes_per_packet,
-        "packets_per_second": packets_per_second,
-        "byte_rate": byte_rate
+        "burst_ratio": burst_ratio,
+        "interval_entropy": interval_entropy,   # 🔥 NEW
+        "size_variance": size_variance          # 🔥 NEW
     }
 
 

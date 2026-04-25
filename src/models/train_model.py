@@ -29,7 +29,7 @@ def scale_data(X, X_train):
 
 def train_model(X_train_scaled):
     model = IsolationForest(
-        contamination=0.15,
+        contamination=0.2,
         random_state=42
     )
     model.fit(X_train_scaled)
