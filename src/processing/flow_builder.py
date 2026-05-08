@@ -67,6 +67,7 @@ def build_flows(packets):
     for key, flow in active_flows.items():
         if flow["packets"]:
             flows.append({
+                "protocol": protocol,
                 "flow_id": flow["flow_id"],
                 "key": key,
                 "packets": flow["packets"],
