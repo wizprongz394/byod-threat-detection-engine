@@ -57,8 +57,8 @@ def scale_data(X, X_train):
 
     scaler = StandardScaler()
 
-    # Fit ONLY on training data
     X_train_scaled = scaler.fit_transform(X_train)
+    X_scaled = scaler.transform(X)
 
     # Transform full dataset
     X_scaled = scaler.transform(X)
@@ -71,18 +71,58 @@ def scale_data(X, X_train):
 def train_model(X_train_scaled):
 
     model = IsolationForest(
-
-        contamination=0.15,
-
-        random_state=42
+    contamination=0.15,
+    random_state=42
     )
 
     model.fit(X_train_scaled)
 
     return model
 
+# PREDICTIONS
 
-#  PREDICTIONS
+def add_risk_scores(model, X_scaled, df):
+
+    # Raw anomaly score
+    scores = model.decision_function(X_scaled)
+
+    # Invert (lower = anomaly → higher risk)
+    scores_inverted = -scores
+
+    # Normalize to [0, 1]
+    min_score = scores_inverted.min()
+    max_score = scores_inverted.max()
+
+    risk_scores = (
+        scores_inverted - min_score
+    ) / (
+        max_score - min_score
+    )
+
+    df["risk_score"] = risk_scores
+
+    return df
+
+
+def classify_risk(score):
+
+    if score < 0.3:
+        return "LOW"
+
+    elif score < 0.7:
+        return "MEDIUM"
+
+    else:
+        return "HIGH"
+
+
+def add_risk_levels(df):
+
+    df["risk_level"] = df["risk_score"].apply(
+        classify_risk
+    )
+
+    return df
 
 def predict(model, X_scaled, df):
 
@@ -115,6 +155,12 @@ def evaluate(df):
         )
     )
 
+    print("\n=== RISK DISTRIBUTION ===")
+
+    print(
+        df["risk_level"].value_counts()
+    )
+
 
 # SAVE RESULTS
 
@@ -145,14 +191,29 @@ if __name__ == "__main__":
 
     print("[INFO] Training Isolation Forest...")
     model = train_model(X_train_scaled)
+print("[INFO] Running predictions...")
 
-    print("[INFO] Running predictions...")
-    df = predict(model, X_scaled, df)
+# Risk scoring
+df = add_risk_scores(
+    model,
+    X_scaled,
+    df
+)
 
-    print("[INFO] Evaluating model...")
-    evaluate(df)
+df = add_risk_levels(df)
 
-    print("[INFO] Saving results...")
-    save_results(df)
+# Binary prediction
+df = predict(
+    model,
+    X_scaled,
+    df
+)
+df = predict(model, X_scaled, df)
 
-    print("\nModel pipeline completed successfully!")
+print("[INFO] Evaluating model...")
+evaluate(df)
+
+print("[INFO] Saving results...")
+save_results(df)
+
+print("\nModel pipeline completed successfully!")
