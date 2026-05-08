@@ -1,118 +1,194 @@
-import json
+import os
 import numpy as np
 import pandas as pd
-from scipy.stats import entropy
-
-
 
 from scipy.stats import entropy
-import numpy as np
+
+
+# CONFIGURATION
+
+RESULTS_DIR = "results"
+
+DATASET_FILE = "dataset.csv"
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+dataset_path = os.path.join(
+    RESULTS_DIR,
+    DATASET_FILE
+)
+
+
+# FEATURE COMPUTATION
 
 def compute_features(flow):
+
     packets = flow["packets"]
 
-    timestamps = [p["timestamp"] for p in packets]
-    sizes = [p["length"] for p in packets]
+    timestamps = [
+        p["timestamp"]
+        for p in packets
+    ]
 
-    # 🔹 Packet size variance (V2)
-    size_variance = np.var(sizes) if len(sizes) > 1 else 0
+    sizes = [
+        p["length"]
+        for p in packets
+    ]
 
-    # 🔹 Basic features
-    duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
+    # BASIC FEATURES
+
+    duration = (
+        max(timestamps) - min(timestamps)
+        if len(timestamps) > 1
+        else 0
+    )
+
     total_bytes = sum(sizes)
+
     packet_count = len(packets)
 
-    # 🔹 Time intervals
+    # INTERVAL FEATURES
+
     if len(timestamps) > 1:
+
         timestamps_sorted = sorted(timestamps)
-        intervals = np.diff(timestamps_sorted)
+
+        intervals = np.diff(
+            timestamps_sorted
+        )
 
         interval_mean = np.mean(intervals)
+
         interval_variance = np.var(intervals)
 
-        # 🔥 Interval entropy (V2)
-        hist, _ = np.histogram(intervals, bins=10)
-        interval_entropy = entropy(hist + 1e-6)
+        # Entropy
+        hist, _ = np.histogram(
+            intervals,
+            bins=10
+        )
+
+        interval_entropy = entropy(
+            hist + 1e-6
+        )
 
     else:
+
         interval_mean = 0
         interval_variance = 0
         interval_entropy = 0
 
-    # 🔹 Derived features (V1)
-    bytes_per_packet = total_bytes / packet_count if packet_count > 0 else 0
+    # SIZE FEATURES
+
+    size_variance = (
+        np.var(sizes)
+        if len(sizes) > 1
+        else 0
+    )
+
+    # DERIVED FEATURES
+
+    bytes_per_packet = (
+        total_bytes / packet_count
+        if packet_count > 0
+        else 0
+    )
 
     packets_per_second = (
-        packet_count / duration if duration > 0 else 0
+        packet_count / duration
+        if duration > 0
+        else 0
     )
 
     byte_rate = (
-        total_bytes / duration if duration > 0 else 0
+        total_bytes / duration
+        if duration > 0
+        else 0
     )
 
     burst_ratio = (
-        interval_variance / interval_mean if interval_mean > 0 else 0
+        interval_variance / interval_mean
+        if interval_mean > 0
+        else 0
     )
 
-    # 🔹 Final feature vector
+    # FINAL FEATURE VECTOR
+
     return {
+
         "duration": duration,
+
         "total_bytes": total_bytes,
+
         "packet_count": packet_count,
+
         "interval_mean": interval_mean,
+
         "interval_variance": interval_variance,
+
+        "interval_entropy": interval_entropy,
+
+        "size_variance": size_variance,
+
         "bytes_per_packet": bytes_per_packet,
+
         "packets_per_second": packets_per_second,
+
         "byte_rate": byte_rate,
-        "burst_ratio": burst_ratio,
-        "interval_entropy": interval_entropy,   # 🔥 NEW
-        "size_variance": size_variance          # 🔥 NEW
+
+        "burst_ratio": burst_ratio
     }
 
 
-def extract_features(json_file):
-    with open(json_file, "r") as f:
-        data = json.load(f)
+# FLOWS TO DATAFRAME
+
+def extract_features(flows, attack_type):
 
     rows = []
 
-    for scenario in data:
-        attack_type = scenario["attack_type"]
+    # Labeling rule:
+    # 0 = normal
+    # 1 = attack
 
-        # 🔹 Labeling rule
-        label = 0 if "random" in attack_type else 1
+    label = (
+        0
+        if "normal" in attack_type.lower()
+        else 1
+    )
 
-        for flow in scenario["flows"]:
-            features = compute_features(flow)
+    for flow in flows:
 
-            features["label"] = label
-            features["attack_type"] = attack_type
+        features = compute_features(flow)
 
-            rows.append(features)
+        features["attack_type"] = attack_type
 
-    return pd.DataFrame(rows)
+        features["label"] = label
+
+        rows.append(features)
+
+    df = pd.DataFrame(rows)
+
+    # CLEAN WEAK FLOWS
+
+    df = df[
+        df["packet_count"] > 1
+    ]
+
+    df = df[
+        df["duration"] > 0
+    ]
+
+    return df
 
 
-if __name__ == "__main__":
-    df = extract_features("../../flow_output.json")
+# SAVE DATASET
 
-    # 🔹 Remove weak flows
-    df = df[df["packet_count"] > 1]
+def save_dataset(df):
 
-    # 🔹 Optional: remove zero-duration noise
-    df = df[df["duration"] > 0]
+    df.to_csv(
+        dataset_path,
+        index=False
+    )
 
-    print(df["label"].value_counts())
-
-    df.to_csv("dataset.csv", index=False)
-
-    print("[SUCCESS] Dataset created: dataset.csv")
-    print(df.head())    
-    df = extract_features("../../flow_output.json")
-    df = df[df["packet_count"] > 1]
-    df["label"].value_counts()
-
-    df.to_csv("dataset.csv", index=False)
-
-    print("[SUCCESS] Dataset created: dataset.csv")
-    print(df.head())
+    print(
+        f"\n[SUCCESS] Dataset saved to: {dataset_path}"
+    )
