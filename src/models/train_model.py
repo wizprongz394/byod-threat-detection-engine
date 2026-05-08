@@ -1,22 +1,6 @@
-
-
-# CONFIGURATION
-
-
-FEATURE_DIR = "results"
-RESULTS_DIR = "results"
-
-DATASET_FILE = "dataset.csv"
-RESULTS_FILE = "results.csv"
-
-dataset_path = os.path.join(FEATURE_DIR, DATASET_FILE)
-
-os.makedirs(RESULTS_DIR, exist_ok=True)
-
-results_path = os.path.join(RESULTS_DIR, RESULTS_FILE)
-
-
-# LOAD DATASET
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 
 # =========================================================
@@ -24,14 +8,7 @@ results_path = os.path.join(RESULTS_DIR, RESULTS_FILE)
 # =========================================================
 
 def load_data():
-
-    if not os.path.exists(dataset_path):
-        raise FileNotFoundError(
-            f"[ERROR] Dataset not found: {dataset_path}"
-        )
-
-    df = pd.read_csv(dataset_path)
-
+    df = pd.read_csv("../features/dataset.csv")
     return df
 
 
@@ -39,13 +16,9 @@ def load_data():
 # PREPARE FEATURES
 # =========================================================
 
-# PREPARE FEATURES
-
 def prepare_data(df):
 
     # All usable features
-
-    # Full feature set
     X = df.drop(columns=["label", "attack_type"])
 
     # Train ONLY on normal traffic
@@ -53,10 +26,6 @@ def prepare_data(df):
         df[df["label"] == 0]
         .drop(columns=["label", "attack_type"])
     )
-    # Train ONLY on normal traffic
-    X_train = df[
-        df["label"] == 0
-    ].drop(columns=["label", "attack_type"])
 
     return X, X_train
 
@@ -65,10 +34,7 @@ def prepare_data(df):
 # SCALE DATA
 # =========================================================
 
-# SCALE FEATURES
-
 def scale_data(X, X_train):
-
 
     scaler = StandardScaler()
 
@@ -78,9 +44,6 @@ def scale_data(X, X_train):
     # Transform complete dataset
     X_scaled = scaler.transform(X)
 
-    # Transform full dataset
-    X_scaled = scaler.transform(X)
-
     return X_scaled, X_train_scaled, scaler
 
 
@@ -88,19 +51,14 @@ def scale_data(X, X_train):
 # TRAIN MODEL
 # =========================================================
 
-# TRAIN ISOLATION FOREST
-
 def train_model(X_train_scaled):
 
-
     model = IsolationForest(
-    contamination=0.15,
-    random_state=42
+        contamination=0.2,
+        random_state=42
     )
 
-
     model.fit(X_train_scaled)
-
 
     return model
 
@@ -108,33 +66,23 @@ def train_model(X_train_scaled):
 # =========================================================
 # RISK SCORE GENERATION
 # =========================================================
-# PREDICTIONS
 
 def add_risk_scores(model, X_scaled, df):
 
     # Raw anomaly scores
-
-    # Raw anomaly score
     scores = model.decision_function(X_scaled)
 
     # Invert:
     # lower score = more anomalous
-    # Invert (lower = anomaly → higher risk)
     scores_inverted = -scores
 
     # Normalize between 0 and 1
-    # Normalize to [0, 1]
     min_score = scores_inverted.min()
     max_score = scores_inverted.max()
 
     risk_scores = (
         (scores_inverted - min_score)
         / (max_score - min_score)
-    )
-    risk_scores = (
-        scores_inverted - min_score
-    ) / (
-        max_score - min_score
     )
 
     df["risk_score"] = risk_scores
@@ -148,14 +96,11 @@ def add_risk_scores(model, X_scaled, df):
 
 def classify_risk(score):
 
-
     if score < 0.3:
         return "LOW"
 
-
     elif score < 0.7:
         return "MEDIUM"
-
 
     else:
         return "HIGH"
@@ -314,11 +259,6 @@ def add_risk_levels(df):
         .apply(suggest_action)
     )
 
-
-    df["risk_level"] = df["risk_score"].apply(
-        classify_risk
-    )
-
     return df
 
 
@@ -327,7 +267,6 @@ def add_risk_levels(df):
 # =========================================================
 
 def predict(model, X_scaled, df):
-
 
     predictions = model.predict(X_scaled)
 
@@ -339,16 +278,6 @@ def predict(model, X_scaled, df):
         pd.Series(predictions)
         .map({1: 0, -1: 1})
     )
-    # IsolationForest:
-    #  1  -> normal
-    # -1  -> anomaly
-
-    df["prediction"] = pd.Series(
-        predictions
-    ).map({
-        1: 0,
-        -1: 1
-    })
 
     return df
 
@@ -357,20 +286,9 @@ def predict(model, X_scaled, df):
 # EVALUATION
 # =========================================================
 
-# EVALUATION
-
 def evaluate(df):
 
     print("\n=== RESULTS ===")
-
-    print(
-        pd.crosstab(
-            df["label"],
-            df["prediction"]
-        )
-    )
-
-    print("\n========== RESULTS ==========\n")
 
     print(
         pd.crosstab(
@@ -407,13 +325,6 @@ def evaluate(df):
 # SAVE OUTPUT
 # =========================================================
 
-    print(
-        df["risk_level"].value_counts()
-    )
-
-
-# SAVE RESULTS
-
 def save_results(df):
 
     df.to_csv("results.csv", index=False)
@@ -422,28 +333,17 @@ def save_results(df):
         "\n[SUCCESS] Results saved to results.csv"
     )
 
-    df.to_csv(results_path, index=False)
-
-    print(
-        f"\n[SUCCESS] Results saved to: {results_path}"
-    )
-
 
 # =========================================================
 # MAIN PIPELINE
 # =========================================================
-
-# MAIN PIPELINE
 
 if __name__ == "__main__":
 
     # Load dataset
-
-    print("\n[INFO] Loading dataset...")
     df = load_data()
 
     # Prepare features
-    print("[INFO] Preparing features...")
     X, X_train = prepare_data(df)
 
     # Scale
@@ -451,14 +351,8 @@ if __name__ == "__main__":
         X,
         X_train
     )
-    print("[INFO] Scaling data...")
-    X_scaled, X_train_scaled, scaler = scale_data(
-        X,
-        X_train
-    )
 
     # Train
-    print("[INFO] Training Isolation Forest...")
     model = train_model(X_train_scaled)
 
     # Risk scoring
@@ -470,16 +364,6 @@ if __name__ == "__main__":
 
     # Risk interpretation
     df = add_risk_levels(df)
-print("[INFO] Running predictions...")
-
-# Risk scoring
-df = add_risk_scores(
-    model,
-    X_scaled,
-    df
-)
-
-df = add_risk_levels(df)
 
     # Binary prediction
     df = predict(
@@ -487,22 +371,9 @@ df = add_risk_levels(df)
         X_scaled,
         df
     )
-# Binary prediction
-df = predict(
-    model,
-    X_scaled,
-    df
-)
-df = predict(model, X_scaled, df)
 
     # Evaluation
     evaluate(df)
-print("[INFO] Evaluating model...")
-evaluate(df)
 
     # Save
     save_results(df)
-print("[INFO] Saving results...")
-save_results(df)
-
-print("\nModel pipeline completed successfully!")
