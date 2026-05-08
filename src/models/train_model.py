@@ -21,8 +21,9 @@ def prepare_data(df):
 def scale_data(X, X_train):
     scaler = StandardScaler()
 
-    X_scaled = scaler.fit_transform(X)
+    # ✅ Correct scaling
     X_train_scaled = scaler.fit_transform(X_train)
+    X_scaled = scaler.transform(X)
 
     return X_scaled, X_train_scaled, scaler
 
@@ -34,6 +35,38 @@ def train_model(X_train_scaled):
     )
     model.fit(X_train_scaled)
     return model
+
+
+def add_risk_scores(model, X_scaled, df):
+    # 🔹 Raw anomaly score
+    scores = model.decision_function(X_scaled)
+
+    # 🔹 Invert (lower = anomaly → higher risk)
+    scores_inverted = -scores
+
+    # 🔹 Normalize to [0, 1]
+    min_score = scores_inverted.min()
+    max_score = scores_inverted.max()
+
+    risk_scores = (scores_inverted - min_score) / (max_score - min_score)
+
+    df["risk_score"] = risk_scores
+
+    return df
+
+
+def classify_risk(score):
+    if score < 0.3:
+        return "LOW"
+    elif score < 0.7:
+        return "MEDIUM"
+    else:
+        return "HIGH"
+
+
+def add_risk_levels(df):
+    df["risk_level"] = df["risk_score"].apply(classify_risk)
+    return df
 
 
 def predict(model, X_scaled, df):
@@ -51,6 +84,9 @@ def evaluate(df):
     print("\n=== RESULTS ===")
     print(pd.crosstab(df["label"], df["prediction"]))
 
+    print("\n=== RISK DISTRIBUTION ===")
+    print(df["risk_level"].value_counts())
+
 
 def save_results(df):
     df.to_csv("results.csv", index=False)
@@ -66,6 +102,11 @@ if __name__ == "__main__":
 
     model = train_model(X_train_scaled)
 
+    # 🔥 NEW: Risk layer
+    df = add_risk_scores(model, X_scaled, df)
+    df = add_risk_levels(df)
+
+    # Existing prediction
     df = predict(model, X_scaled, df)
 
     evaluate(df)
