@@ -1,6 +1,31 @@
+import os
 import pandas as pd
+
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
+
+FEATURE_DIR = "../../results"
+RESULTS_DIR = "../../results"
+
+DATASET_FILE = "dataset.csv"
+RESULTS_FILE = "results.csv"
+
+dataset_path = os.path.join(
+    FEATURE_DIR,
+    DATASET_FILE
+)
+
+results_path = os.path.join(
+    RESULTS_DIR,
+    RESULTS_FILE
+)
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 # =========================================================
@@ -8,7 +33,14 @@ from sklearn.preprocessing import StandardScaler
 # =========================================================
 
 def load_data():
-    df = pd.read_csv("../features/dataset.csv")
+
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(
+            f"[ERROR] Dataset not found: {dataset_path}"
+        )
+
+    df = pd.read_csv(dataset_path)
+
     return df
 
 
@@ -18,8 +50,10 @@ def load_data():
 
 def prepare_data(df):
 
-    # All usable features
-    X = df.drop(columns=["label", "attack_type"])
+    # Full feature set
+    X = df.drop(
+        columns=["label", "attack_type"]
+    )
 
     # Train ONLY on normal traffic
     X_train = (
@@ -31,7 +65,7 @@ def prepare_data(df):
 
 
 # =========================================================
-# SCALE DATA
+# SCALE FEATURES
 # =========================================================
 
 def scale_data(X, X_train):
@@ -39,22 +73,24 @@ def scale_data(X, X_train):
     scaler = StandardScaler()
 
     # Fit ONLY on training data
-    X_train_scaled = scaler.fit_transform(X_train)
+    X_train_scaled = scaler.fit_transform(
+        X_train
+    )
 
-    # Transform complete dataset
+    # Transform full dataset
     X_scaled = scaler.transform(X)
 
     return X_scaled, X_train_scaled, scaler
 
 
 # =========================================================
-# TRAIN MODEL
+# TRAIN ISOLATION FOREST
 # =========================================================
 
 def train_model(X_train_scaled):
 
     model = IsolationForest(
-        contamination=0.2,
+        contamination=0.15,
         random_state=42
     )
 
@@ -64,19 +100,21 @@ def train_model(X_train_scaled):
 
 
 # =========================================================
-# RISK SCORE GENERATION
+# GENERATE RISK SCORES
 # =========================================================
 
 def add_risk_scores(model, X_scaled, df):
 
-    # Raw anomaly scores
-    scores = model.decision_function(X_scaled)
+    # Raw anomaly score
+    scores = model.decision_function(
+        X_scaled
+    )
 
     # Invert:
     # lower score = more anomalous
     scores_inverted = -scores
 
-    # Normalize between 0 and 1
+    # Normalize to [0, 1]
     min_score = scores_inverted.min()
     max_score = scores_inverted.max()
 
@@ -225,8 +263,8 @@ def suggest_action(risk_level):
     elif risk_level == "MEDIUM":
 
         return (
-            "Monitor behavior and log activity for "
-            "further analysis."
+            "Monitor behavior and log activity "
+            "for further analysis."
         )
 
     else:
@@ -307,7 +345,6 @@ def evaluate(df):
     print("\n=== SAMPLE RISK ANALYSIS ===")
 
     print(
-
         df[
             [
                 "risk_score",
@@ -315,22 +352,20 @@ def evaluate(df):
                 "risk_reason",
                 "suggested_action"
             ]
-
         ].head(5)
-
     )
 
 
 # =========================================================
-# SAVE OUTPUT
+# SAVE RESULTS
 # =========================================================
 
 def save_results(df):
 
-    df.to_csv("results.csv", index=False)
+    df.to_csv(results_path, index=False)
 
     print(
-        "\n[SUCCESS] Results saved to results.csv"
+        f"\n[SUCCESS] Results saved to {results_path}"
     )
 
 
@@ -338,7 +373,7 @@ def save_results(df):
 # MAIN PIPELINE
 # =========================================================
 
-if __name__ == "__main__":
+def main():
 
     # Load dataset
     df = load_data()
@@ -346,34 +381,38 @@ if __name__ == "__main__":
     # Prepare features
     X, X_train = prepare_data(df)
 
-    # Scale
+    # Scale data
     X_scaled, X_train_scaled, scaler = scale_data(
         X,
         X_train
     )
 
-    # Train
+    # Train model
     model = train_model(X_train_scaled)
 
-    # Risk scoring
+    # Generate risk scores
     df = add_risk_scores(
         model,
         X_scaled,
         df
     )
 
-    # Risk interpretation
+    # Apply explainability layer
     df = add_risk_levels(df)
 
-    # Binary prediction
+    # Generate predictions
     df = predict(
         model,
         X_scaled,
         df
     )
 
-    # Evaluation
+    # Evaluate
     evaluate(df)
 
-    # Save
+    # Save output
     save_results(df)
+
+
+if __name__ == "__main__":
+    main()
