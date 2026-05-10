@@ -18,6 +18,11 @@ from src.models.train_model import (
     evaluate,
     save_results
 )
+from src.models.report_generator import (
+    build_report,
+    save_report,
+    display_summary
+)
 
 
 # FILE INPUT
@@ -143,5 +148,12 @@ if __name__ == "__main__":
     print("\n[INFO] Saving results...")
 
     save_results(df)
+    print("\n[INFO] Generating threat report...")
 
+    report = build_report(df)
+
+    save_report(report)
+
+    display_summary(report)
+    
     print("\n Pipeline completed successfully!")

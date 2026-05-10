@@ -4,6 +4,8 @@ import pandas as pd
 
 from scipy.stats import entropy
 
+from src.models.train_model import DATASET_PATH
+
 
 # CONFIGURATION
 
@@ -184,11 +186,47 @@ def extract_features(flows, attack_type):
 
 def save_dataset(df):
 
-    df.to_csv(
-        dataset_path,
-        index=False
-    )
+    if os.path.exists(DATASET_PATH):
 
-    print(
-        f"\n[SUCCESS] Dataset saved to: {dataset_path}"
-    )
+        existing_df = pd.read_csv(
+            DATASET_PATH
+        )
+
+        combined_df = pd.concat(
+            [existing_df, df],
+            ignore_index=True
+        )
+
+        combined_df.to_csv(
+            DATASET_PATH,
+            index=False
+        )
+
+        print(
+            "\n[INFO] Existing dataset found."
+        )
+
+        print(
+            "[INFO] Appended new rows."
+        )
+
+        print(
+            f"[INFO] Total rows: "
+            f"{len(combined_df)}"
+        )
+
+    else:
+
+        df.to_csv(
+            DATASET_PATH,
+            index=False
+        )
+
+        print(
+            "\n[INFO] New dataset created."
+        )
+
+        print(
+            f"[INFO] Rows saved: "
+            f"{len(df)}"
+        )

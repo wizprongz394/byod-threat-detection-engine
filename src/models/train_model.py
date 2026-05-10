@@ -1,112 +1,117 @@
 import os
+import numpy as np
 import pandas as pd
 
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 
-<<<<<<< HEAD
 # =========================================================
-# CONFIGURATION
+# PATH CONFIGURATION
 # =========================================================
 
-FEATURE_DIR = "../../results"
-RESULTS_DIR = "../../results"
-=======
-# CONFIGURATION
-
-FEATURE_DIR = "results"
-RESULTS_DIR = "results"
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
-
-DATASET_FILE = "dataset.csv"
-RESULTS_FILE = "results.csv"
-
-dataset_path = os.path.join(
-    FEATURE_DIR,
-    DATASET_FILE
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
 )
 
-<<<<<<< HEAD
-=======
-os.makedirs(RESULTS_DIR, exist_ok=True)
+RESULTS_DIR = os.path.join(
+    BASE_DIR,
+    "results"
+)
 
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
-results_path = os.path.join(
+DATASET_PATH = os.path.join(
     RESULTS_DIR,
-    RESULTS_FILE
+    "dataset.csv"
 )
 
-<<<<<<< HEAD
-os.makedirs(RESULTS_DIR, exist_ok=True)
+RESULTS_PATH = os.path.join(
+    RESULTS_DIR,
+    "results.csv"
+)
+
+os.makedirs(
+    RESULTS_DIR,
+    exist_ok=True
+)
 
 
 # =========================================================
-# LOAD DATA
-# =========================================================
-=======
-
 # LOAD DATASET
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
+# =========================================================
 
 def load_data():
 
-    if not os.path.exists(dataset_path):
-<<<<<<< HEAD
-=======
+    if not os.path.exists(DATASET_PATH):
 
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
         raise FileNotFoundError(
-            f"[ERROR] Dataset not found: {dataset_path}"
+            f"[ERROR] Dataset not found: "
+            f"{DATASET_PATH}"
         )
 
-    df = pd.read_csv(dataset_path)
+    df = pd.read_csv(
+        DATASET_PATH
+    )
+
+    print(
+        f"\n[INFO] Dataset loaded: "
+        f"{len(df)} rows"
+    )
 
     return df
 
 
+# =========================================================
 # PREPARE FEATURES
+# =========================================================
 
 def prepare_data(df):
 
-    # Full feature set
+    # -----------------------------------------------------
+    # REMOVE NON-NUMERIC COLUMNS
+    # -----------------------------------------------------
+
     X = df.drop(
-        columns=["label", "attack_type"]
-<<<<<<< HEAD
+        columns=[
+            "label",
+            "attack_type"
+        ],
+        errors="ignore"
     )
 
-    # Train ONLY on normal traffic
-    X_train = (
-        df[df["label"] == 0]
-        .drop(columns=["label", "attack_type"])
-=======
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
-    )
+    # -----------------------------------------------------
+    # TRAIN ONLY ON NORMAL TRAFFIC
+    # -----------------------------------------------------
 
-    # --------------------------------------
-    # Train ONLY on normal traffic
-    # --------------------------------------
-
-    normal_df = df[
+    X_train = df[
         df["label"] == 0
-    ]
+    ].drop(
+        columns=[
+            "label",
+            "attack_type"
+        ],
+        errors="ignore"
+    )
 
-    # If normal traffic exists
-    if len(normal_df) > 0:
+    # -----------------------------------------------------
+    # FALLBACK SAFETY
+    # -----------------------------------------------------
 
-        X_train = normal_df.drop(
-            columns=["label", "attack_type"]
-        )
+    # If no normal traffic exists,
+    # fallback to entire dataset.
 
-    # Fallback for pure attack datasets
-    else:
+    if len(X_train) == 0:
 
         print(
             "\n[WARNING] No normal traffic found."
         )
 
         print(
-            "[WARNING] Using full dataset for training."
+            "[WARNING] Falling back to "
+            "full dataset for training."
         )
 
         X_train = X.copy()
@@ -114,97 +119,214 @@ def prepare_data(df):
     return X, X_train
 
 
-<<<<<<< HEAD
 # =========================================================
 # SCALE FEATURES
 # =========================================================
-=======
-# SCALE FEATURES
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
 
 def scale_data(X, X_train):
 
     scaler = StandardScaler()
 
-    # Fit ONLY on training data
+    # -----------------------------------------------------
+    # FIT ONLY ON TRAINING DATA
+    # -----------------------------------------------------
+
     X_train_scaled = scaler.fit_transform(
         X_train
     )
 
-    # Transform full dataset
-    X_scaled = scaler.transform(X)
+    # -----------------------------------------------------
+    # TRANSFORM FULL DATASET
+    # -----------------------------------------------------
 
-    return X_scaled, X_train_scaled, scaler
+    X_scaled = scaler.transform(
+        X
+    )
+
+    print(
+        "\n[INFO] Feature scaling complete."
+    )
+
+    return (
+        X_scaled,
+        X_train_scaled,
+        scaler
+    )
 
 
-<<<<<<< HEAD
 # =========================================================
-# TRAIN ISOLATION FOREST
+# TRAIN MODEL
 # =========================================================
-=======
-# TRAIN ISOLATION FOREST
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
 
 def train_model(X_train_scaled):
 
     model = IsolationForest(
-        contamination=0.15,
+
+        contamination=0.20,
+
         random_state=42
     )
 
-    model.fit(X_train_scaled)
+    model.fit(
+        X_train_scaled
+    )
+
+    print(
+        "\n[INFO] Isolation Forest "
+        "training complete."
+    )
 
     return model
 
 
-<<<<<<< HEAD
 # =========================================================
-# GENERATE RISK SCORES
+# GENERATE PREDICTIONS
 # =========================================================
-=======
-# RISK SCORING
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
 
-def add_risk_scores(model, X_scaled, df):
+def predict(model, X_scaled, df):
 
-    # Raw anomaly score
-    scores = model.decision_function(
+    # -----------------------------------------------------
+    # RAW PREDICTIONS
+    # -----------------------------------------------------
+
+    predictions = model.predict(
         X_scaled
     )
 
-    # Invert:
-    # lower = anomaly → higher risk
-    scores_inverted = -scores
+    # -----------------------------------------------------
+    # CONVERT OUTPUT
+    # -----------------------------------------------------
 
-    # Normalize to [0, 1]
-    min_score = scores_inverted.min()
+    # Isolation Forest:
+    #
+    #  1  -> normal
+    # -1 -> anomaly
+    #
+    # Convert into:
+    #
+    # 0 -> normal
+    # 1 -> anomaly
 
-    max_score = scores_inverted.max()
+    mapped_predictions = [
 
-    risk_scores = (
-        scores_inverted - min_score
-    ) / (
-        max_score - min_score
+        0 if prediction == 1 else 1
+
+        for prediction in predictions
+    ]
+
+    # -----------------------------------------------------
+    # SAFE ASSIGNMENT
+    # -----------------------------------------------------
+
+    df["prediction"] = (
+        mapped_predictions
     )
 
-    df["risk_score"] = risk_scores
+    # -----------------------------------------------------
+    # VALIDATION
+    # -----------------------------------------------------
+
+    missing_predictions = (
+
+        df["prediction"]
+        .isna()
+        .sum()
+    )
+
+    if missing_predictions > 0:
+
+        print(
+            "\n[WARNING] Missing predictions:"
+            f" {missing_predictions}"
+        )
+
+    else:
+
+        print(
+            "\n[INFO] Prediction generation successful."
+        )
 
     return df
 
 
+# =========================================================
+# ADD RISK SCORES
+# =========================================================
+
+def add_risk_scores(
+    model,
+    X_scaled,
+    df
+):
+
+    # -----------------------------------------------------
+    # RAW ANOMALY SCORES
+    # -----------------------------------------------------
+
+    scores = model.decision_function(
+        X_scaled
+    )
+
+    # -----------------------------------------------------
+    # INVERT SCORES
+    # -----------------------------------------------------
+
+    # Lower score = more anomalous
+    # So invert.
+
+    scores_inverted = -scores
+
+    # -----------------------------------------------------
+    # NORMALIZE
+    # -----------------------------------------------------
+
+    min_score = np.min(
+        scores_inverted
+    )
+
+    max_score = np.max(
+        scores_inverted
+    )
+
+    risk_scores = (
+
+        (scores_inverted - min_score)
+
+        /
+
+        (max_score - min_score)
+    )
+
+    df["risk_score"] = (
+        risk_scores
+    )
+
+    print(
+        "\n[INFO] Risk scoring complete."
+    )
+
+    return df
+
+
+# =========================================================
+# RISK CLASSIFICATION
+# =========================================================
+
 def classify_risk(score):
 
-    if score < 0.3:
+    if score < 0.30:
+
         return "LOW"
 
-    elif score < 0.7:
+    elif score < 0.70:
+
         return "MEDIUM"
 
     else:
+
         return "HIGH"
 
 
-<<<<<<< HEAD
 # =========================================================
 # EXPLAINABILITY ENGINE
 # =========================================================
@@ -213,103 +335,123 @@ def explain_risk(row):
 
     reasons = []
 
-    risk_level = row["risk_level"]
-
     # -----------------------------------------------------
-    # Timing entropy
+    # INTERVAL ENTROPY
     # -----------------------------------------------------
 
-    if row["interval_entropy"] > 1.5:
+    if row.get(
+        "interval_entropy",
+        0
+    ) > 1.5:
 
-        if risk_level == "HIGH":
-            reasons.append(
-                "Severe irregular timing behavior detected"
-            )
-
-        else:
-            reasons.append(
-                "Irregular packet timing observed"
-            )
+        reasons.append(
+            "Highly irregular timing behavior detected"
+        )
 
     # -----------------------------------------------------
-    # Burst communication
+    # BURST RATIO
     # -----------------------------------------------------
 
-    if row["burst_ratio"] > 5:
+    if row.get(
+        "burst_ratio",
+        0
+    ) > 5:
 
-        if risk_level == "HIGH":
-            reasons.append(
-                "Aggressive burst communication pattern identified"
-            )
-
-        else:
-            reasons.append(
-                "Burst communication behavior observed"
-            )
+        reasons.append(
+            "Burst communication behavior observed"
+        )
 
     # -----------------------------------------------------
-    # Packet transmission intensity
+    # PACKET RATE
     # -----------------------------------------------------
 
-    if row["packets_per_second"] > 500:
+    if row.get(
+        "packets_per_second",
+        0
+    ) > 50:
 
-        if risk_level == "HIGH":
-            reasons.append(
-                "Extremely elevated packet transmission rate"
-            )
-
-        else:
-            reasons.append(
-                "Elevated packet transmission rate"
-            )
+        reasons.append(
+            "Elevated packet transmission rate"
+        )
 
     # -----------------------------------------------------
-    # Packet size variance
+    # SIZE VARIANCE
     # -----------------------------------------------------
 
-    if row["size_variance"] > 10000:
+    if row.get(
+        "size_variance",
+        0
+    ) > 10000:
 
-        if risk_level == "HIGH":
-            reasons.append(
-                "Significant packet size irregularity detected"
-            )
-
-        else:
-            reasons.append(
-                "Abnormal packet size variation detected"
-            )
+        reasons.append(
+            "Abnormal packet size variation detected"
+        )
 
     # -----------------------------------------------------
-    # Byte transfer intensity
+    # BYTE RATE
     # -----------------------------------------------------
 
-    if row["byte_rate"] > 100000:
+    if row.get(
+        "byte_rate",
+        0
+    ) > 100000:
 
-        if risk_level == "HIGH":
-            reasons.append(
-                "Extremely high data transfer behavior observed"
-            )
-
-        else:
-            reasons.append(
-                "Unusually high data transfer rate"
-            )
+        reasons.append(
+            "Unusually high data transfer rate"
+        )
 
     # -----------------------------------------------------
-    # Fallback
+    # FALLBACK
     # -----------------------------------------------------
 
     if not reasons:
 
         reasons.append(
-            "Behavior within expected operational parameters"
+            "Behavior within expected operational range"
         )
 
-    return " | ".join(reasons)
+    return reasons
 
 
 # =========================================================
-# SUGGESTED SECURITY ACTIONS
+# THREAT CATEGORY ENGINE
+# =========================================================
+
+def categorize_threat(reasons):
+
+    joined = " ".join(
+        reasons
+    ).lower()
+
+    if (
+        "timing" in joined
+        or
+        "burst" in joined
+    ):
+
+        return (
+            "Possible Beaconing Activity"
+        )
+
+    elif (
+        "transfer" in joined
+        or
+        "packet size" in joined
+    ):
+
+        return (
+            "Potential Data Exfiltration"
+        )
+
+    else:
+
+        return (
+            "General Behavioral Anomaly"
+        )
+
+
+# =========================================================
+# POLICY ENGINE
 # =========================================================
 
 def suggest_action(risk_level):
@@ -318,7 +460,8 @@ def suggest_action(risk_level):
 
         return (
             "Immediate investigation recommended. "
-            "Consider isolating session or blocking traffic."
+            "Consider isolating session or "
+            "blocking traffic."
         )
 
     elif risk_level == "MEDIUM":
@@ -336,74 +479,150 @@ def suggest_action(risk_level):
 
 
 # =========================================================
-# APPLY RISK LAYER
+# POLICY ACTION
 # =========================================================
 
-=======
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
+def determine_policy_action(
+    risk_level
+):
+
+    if risk_level == "HIGH":
+
+        return "ALERT"
+
+    elif risk_level == "MEDIUM":
+
+        return "MONITOR"
+
+    else:
+
+        return "IGNORE"
+
+
+# =========================================================
+# ANOMALY STRENGTH
+# =========================================================
+
+def estimate_confidence(score):
+
+    if score >= 0.85:
+
+        return "HIGH"
+
+    elif score >= 0.50:
+
+        return "MEDIUM"
+
+    else:
+
+        return "LOW"
+
+
+# =========================================================
+# ADD RISK LAYERS
+# =========================================================
+
 def add_risk_levels(df):
 
-    df["risk_level"] = df[
-        "risk_score"
-    ].apply(classify_risk)
+    # -----------------------------------------------------
+    # RISK LEVEL
+    # -----------------------------------------------------
 
-    return df
+    df["risk_level"] = (
 
-
-# PREDICTIONS
-
-def predict(model, X_scaled, df):
-
-    predictions = model.predict(
-        X_scaled
+        df["risk_score"]
+        .apply(classify_risk)
     )
 
-    # IsolationForest:
-    #  1  -> normal
-    # -1  -> anomaly
+    # -----------------------------------------------------
+    # BEHAVIOR SUMMARY
+    # -----------------------------------------------------
 
-    df["prediction"] = pd.Series(
-        predictions
-    ).map({
-        1: 0,
-        -1: 1
-    })
+    df["behavior_summary"] = (
+
+        df.apply(
+            explain_risk,
+            axis=1
+        )
+    )
+
+    # -----------------------------------------------------
+    # THREAT CATEGORY
+    # -----------------------------------------------------
+
+    df["threat_category"] = (
+
+        df["behavior_summary"]
+        .apply(categorize_threat)
+    )
+
+    # -----------------------------------------------------
+    # POLICY ACTION
+    # -----------------------------------------------------
+
+    df["policy_action"] = (
+
+        df["risk_level"]
+        .apply(determine_policy_action)
+    )
+
+    # -----------------------------------------------------
+    # SUGGESTED ACTION
+    # -----------------------------------------------------
+
+    df["suggested_action"] = (
+
+        df["risk_level"]
+        .apply(suggest_action)
+    )
+
+    # -----------------------------------------------------
+    # ANOMALY STRENGTH
+    # -----------------------------------------------------
+
+    df["anomaly_strength"] = (
+
+        df["risk_score"]
+        .apply(estimate_confidence)
+    )
 
     return df
 
 
+# =========================================================
 # EVALUATION
+# =========================================================
 
 def evaluate(df):
 
-    print("\n========== RESULTS ==========\n")
+    print(
+        "\n=== RESULTS ==="
+    )
 
     print(
+
         pd.crosstab(
             df["label"],
             df["prediction"]
         )
     )
 
-    print("\n=== RISK DISTRIBUTION ===")
+    print(
+        "\n=== RISK DISTRIBUTION ==="
+    )
 
     print(
-<<<<<<< HEAD
         df["risk_level"]
         .value_counts()
     )
 
-    print("\n=== SAMPLE RISK ANALYSIS ===")
+    print(
+        "\n=== THREAT CATEGORIES ==="
+    )
 
     print(
-        df[
-            [
-                "risk_score",
-                "risk_level",
-                "risk_reason",
-                "suggested_action"
-            ]
-        ].head(5)
+        df["threat_category"]
+        .value_counts()
     )
 
 
@@ -413,104 +632,140 @@ def evaluate(df):
 
 def save_results(df):
 
-    df.to_csv(results_path, index=False)
+    if os.path.exists(
+        RESULTS_PATH
+    ):
 
-    print(
-        f"\n[SUCCESS] Results saved to {results_path}"
-=======
-        df["risk_level"].value_counts()
-    )
+        existing_df = pd.read_csv(
+            RESULTS_PATH
+        )
+
+        combined_df = pd.concat(
+            [existing_df, df],
+            ignore_index=True
+        )
+
+        combined_df.to_csv(
+            RESULTS_PATH,
+            index=False
+        )
+
+        print(
+            "\n[INFO] Existing results found."
+        )
+
+        print(
+            "[INFO] Appended new results."
+        )
+
+        print(
+            f"[INFO] Total rows: "
+            f"{len(combined_df)}"
+        )
+
+    else:
+
+        df.to_csv(
+            RESULTS_PATH,
+            index=False
+        )
+
+        print(
+            "\n[INFO] New results file created."
+        )
+
+        print(
+            f"[INFO] Rows saved: "
+            f"{len(df)}"
+        )
 
 
-# SAVE RESULTS
-
-def save_results(df):
-
-    df.to_csv(
-        results_path,
-        index=False
-    )
-
-    print(
-        f"\n[SUCCESS] Results saved to: {results_path}"
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
-    )
-
-
-# MAIN PIPELINE
+# =========================================================
+# MAIN
+# =========================================================
 
 def main():
 
-    print("\n[INFO] Loading dataset...")
+    print(
+        "\n========== MODEL PIPELINE =========="
+    )
+
+    # -----------------------------------------------------
+    # LOAD DATA
+    # -----------------------------------------------------
 
     df = load_data()
 
-    print("[INFO] Preparing features...")
+    # -----------------------------------------------------
+    # PREPARE FEATURES
+    # -----------------------------------------------------
 
-    X, X_train = prepare_data(df)
+    X, X_train = prepare_data(
+        df
+    )
 
-<<<<<<< HEAD
-    # Scale data
-=======
-    print("[INFO] Scaling data...")
+    # -----------------------------------------------------
+    # SCALE DATA
+    # -----------------------------------------------------
 
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
-    X_scaled, X_train_scaled, scaler = scale_data(
+    (
+        X_scaled,
+        X_train_scaled,
+        scaler
+
+    ) = scale_data(
         X,
         X_train
     )
 
-<<<<<<< HEAD
-    # Train model
-    model = train_model(X_train_scaled)
-=======
-    print("[INFO] Training Isolation Forest...")
+    # -----------------------------------------------------
+    # TRAIN MODEL
+    # -----------------------------------------------------
 
     model = train_model(
         X_train_scaled
     )
 
-    print("[INFO] Running predictions...")
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
+    # -----------------------------------------------------
+    # PREDICTIONS
+    # -----------------------------------------------------
 
-    # Generate risk scores
-    df = add_risk_scores(
-        model,
-        X_scaled,
-        df
-    )
-
-<<<<<<< HEAD
-    # Apply explainability layer
-=======
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c
-    df = add_risk_levels(df)
-
-    # Generate predictions
     df = predict(
         model,
         X_scaled,
         df
     )
 
-<<<<<<< HEAD
-    # Evaluate
+    # -----------------------------------------------------
+    # RISK ENGINE
+    # -----------------------------------------------------
+
+    df = add_risk_scores(
+        model,
+        X_scaled,
+        df
+    )
+
+    df = add_risk_levels(
+        df
+    )
+
+    # -----------------------------------------------------
+    # EVALUATE
+    # -----------------------------------------------------
+
     evaluate(df)
 
-    # Save output
+    # -----------------------------------------------------
+    # SAVE
+    # -----------------------------------------------------
+
     save_results(df)
 
+
+# =========================================================
+# ENTRY POINT
+# =========================================================
 
 if __name__ == "__main__":
     main()
-=======
-    print("[INFO] Evaluating model...")
-
-    evaluate(df)
-
-    print("[INFO] Saving results...")
-
-    save_results(df)
-
-    print("\nModel pipeline completed successfully!")
->>>>>>> 1bf1b81939e3955bf084307584f24322728b109c

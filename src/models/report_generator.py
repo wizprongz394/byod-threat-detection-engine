@@ -1,18 +1,33 @@
 import json
 import os
+import ast
 from datetime import datetime
 
 import pandas as pd
 
 
 # =========================================================
-# CONFIGURATION
+# PATH CONFIGURATION (PHASE 2 STABILIZATION)
 # =========================================================
 
-RESULTS_DIR = "../../results"
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+)
+
+RESULTS_DIR = os.path.join(
+    BASE_DIR,
+    "results"
+)
 
 RESULTS_FILE = "results.csv"
-THREAT_REPORT_FILE = "threat_report.json"
+
+THREAT_REPORT_FILE = (
+    "threat_report.json"
+)
 
 results_path = os.path.join(
     RESULTS_DIR,
@@ -24,6 +39,13 @@ report_path = os.path.join(
     THREAT_REPORT_FILE
 )
 
+# Ensure results directory exists
+
+os.makedirs(
+    RESULTS_DIR,
+    exist_ok=True
+)
+
 
 # =========================================================
 # LOAD RESULTS
@@ -31,84 +53,146 @@ report_path = os.path.join(
 
 def load_results():
 
-    if not os.path.exists(results_path):
+    # -----------------------------------------------------
+    # VALIDATE FILE
+    # -----------------------------------------------------
+
+    if not os.path.exists(
+        results_path
+    ):
 
         raise FileNotFoundError(
-            f"[ERROR] Results file not found: {results_path}"
+
+            f"[ERROR] Results file "
+            f"not found:\n{results_path}"
         )
 
-    df = pd.read_csv(results_path)
+    # -----------------------------------------------------
+    # LOAD CSV
+    # -----------------------------------------------------
+
+    df = pd.read_csv(
+        results_path
+    )
+
+    # -----------------------------------------------------
+    # VALIDATION
+    # -----------------------------------------------------
+
+    if len(df) == 0:
+
+        raise ValueError(
+            "[ERROR] Results file is empty."
+        )
+
+    print(
+        f"\n[INFO] Results loaded:"
+        f" {len(df)} rows"
+    )
 
     return df
 
 
 # =========================================================
-# DETECTION CONFIDENCE
+# SAFE BEHAVIOR PARSER
 # =========================================================
 
-def estimate_anomaly_strength(score):
+def parse_behavior_summary(value):
+
+    # -----------------------------------------------------
+    # ALREADY LIST
+    # -----------------------------------------------------
+
+    if isinstance(value, list):
+
+        return value
+
+    # -----------------------------------------------------
+    # MISSING VALUE
+    # -----------------------------------------------------
+
+    if pd.isna(value):
+
+        return [
+            "No behavioral explanation available"
+        ]
+
+    # -----------------------------------------------------
+    # STRINGIFIED LIST
+    # -----------------------------------------------------
+
+    try:
+
+        parsed = ast.literal_eval(
+            value
+        )
+
+        if isinstance(parsed, list):
+
+            return parsed
+
+    except Exception:
+
+        pass
+
+    # -----------------------------------------------------
+    # FALLBACK
+    # -----------------------------------------------------
+
+    return [str(value)]
+
+
+# =========================================================
+# SAFE NUMERIC PARSER
+# =========================================================
+
+def safe_float(value, default=0.0):
+
+    try:
+
+        if pd.isna(value):
+
+            return default
+
+        return float(value)
+
+    except Exception:
+
+        return default
+
+
+def safe_int(value, default=0):
+
+    try:
+
+        if pd.isna(value):
+
+            return default
+
+        return int(value)
+
+    except Exception:
+
+        return default
+
+
+# =========================================================
+# CONFIDENCE ESTIMATION
+# =========================================================
+
+def estimate_confidence(score):
 
     if score >= 0.85:
+
         return "HIGH"
 
     elif score >= 0.50:
+
         return "MEDIUM"
 
     else:
+
         return "LOW"
-
-
-# =========================================================
-# THREAT CATEGORY INFERENCE
-# =========================================================
-
-def infer_threat_category(behavior_summary):
-
-    joined_summary = " ".join(
-        behavior_summary
-    ).lower()
-
-    if (
-        "burst" in joined_summary
-        and "transfer" in joined_summary
-    ):
-
-        return "Potential Data Exfiltration"
-
-    elif "timing" in joined_summary:
-
-        return "Possible Beaconing Activity"
-
-    elif "packet size" in joined_summary:
-
-        return "Irregular Traffic Pattern"
-
-    elif "transmission rate" in joined_summary:
-
-        return "Traffic Spike Anomaly"
-
-    else:
-
-        return "General Behavioral Anomaly"
-
-
-# =========================================================
-# POLICY DECISION ENGINE
-# =========================================================
-
-def determine_policy_action(risk_level):
-
-    if risk_level == "HIGH":
-
-        return "ALERT"
-
-    elif risk_level == "MEDIUM":
-
-        return "MONITOR"
-
-    else:
-
-        return "IGNORE"
 
 
 # =========================================================
@@ -121,133 +205,191 @@ def build_threat_objects(df):
 
     for idx, row in df.iterrows():
 
-        behavior_summary = (
-            row["risk_reason"]
-            .split(" | ")
+        # -------------------------------------------------
+        # SAFE VALUES
+        # -------------------------------------------------
+
+        risk_score = safe_float(
+            row.get(
+                "risk_score",
+                0.0
+            )
         )
 
-        threat_category = infer_threat_category(
-            behavior_summary
+        prediction = safe_int(
+            row.get(
+                "prediction",
+                0
+            )
         )
+
+        behavior_summary = (
+            parse_behavior_summary(
+
+                row.get(
+                    "behavior_summary",
+                    []
+                )
+            )
+        )
+
+        # -------------------------------------------------
+        # THREAT OBJECT
+        # -------------------------------------------------
 
         threat = {
 
-            # -------------------------------------------------
-            # Flow Identification
-            # -------------------------------------------------
-
             "flow_id": int(idx),
 
-            # -------------------------------------------------
-            # Risk Intelligence
-            # -------------------------------------------------
+            "prediction": prediction,
 
             "risk_score": round(
-                float(row["risk_score"]),
+                risk_score,
                 4
             ),
 
-            "risk_level": row["risk_level"],
-
-            "anomaly_strength":
-                estimate_anomaly_strength(
-                    row["risk_score"]
-                ),
-
-            "prediction": int(
-                row["prediction"]
+            "risk_level": row.get(
+                "risk_level",
+                "UNKNOWN"
             ),
 
-            # -------------------------------------------------
-            # Threat Interpretation
-            # -------------------------------------------------
+            "anomaly_strength": row.get(
 
-            "threat_category":
-                threat_category,
+                "anomaly_strength",
 
-            "behavior_summary":
-                behavior_summary,
+                estimate_confidence(
+                    risk_score
+                )
+            ),
 
-            # -------------------------------------------------
-            # Policy & Response
-            # -------------------------------------------------
+            "threat_category": row.get(
 
-            "policy_action":
-                determine_policy_action(
-                    row["risk_level"]
-                ),
+                "threat_category",
 
-            "suggested_action":
-                row["suggested_action"]
+                "General Behavioral "
+                "Anomaly"
+            ),
+
+            "policy_action": row.get(
+
+                "policy_action",
+
+                "MONITOR"
+            ),
+
+            "behavior_summary": (
+                behavior_summary
+            ),
+
+            "suggested_action": row.get(
+
+                "suggested_action",
+
+                "Further investigation "
+                "recommended."
+            )
         }
 
-        threats.append(threat)
+        threats.append(
+            threat
+        )
 
     return threats
 
 
 # =========================================================
-# BUILD REPORT METADATA
-# =========================================================
-
-def build_metadata(df):
-
-    metadata = {
-
-        "generated_at":
-
-            datetime.now()
-            .strftime("%Y-%m-%d %H:%M:%S"),
-
-        "total_flows":
-
-            int(len(df)),
-
-        "high_risk_flows":
-
-            int(
-                (df["risk_level"] == "HIGH")
-                .sum()
-            ),
-
-        "medium_risk_flows":
-
-            int(
-                (df["risk_level"] == "MEDIUM")
-                .sum()
-            ),
-
-        "low_risk_flows":
-
-            int(
-                (df["risk_level"] == "LOW")
-                .sum()
-            ),
-
-        "detected_anomalies":
-
-            int(
-                (df["prediction"] == 1)
-                .sum()
-            )
-    }
-
-    return metadata
-
-
-# =========================================================
-# BUILD FINAL REPORT
+# BUILD REPORT
 # =========================================================
 
 def build_report(df):
 
+    # -----------------------------------------------------
+    # SAFE COUNTS
+    # -----------------------------------------------------
+
+    total_flows = int(
+        len(df)
+    )
+
+    anomalous_flows = int(
+
+        (df["prediction"] == 1)
+        .sum()
+
+    ) if "prediction" in df else 0
+
+    normal_flows = int(
+
+        (df["prediction"] == 0)
+        .sum()
+
+    ) if "prediction" in df else 0
+
+    high_risk = int(
+
+        (df["risk_level"] == "HIGH")
+        .sum()
+
+    ) if "risk_level" in df else 0
+
+    medium_risk = int(
+
+        (df["risk_level"] == "MEDIUM")
+        .sum()
+
+    ) if "risk_level" in df else 0
+
+    low_risk = int(
+
+        (df["risk_level"] == "LOW")
+        .sum()
+
+    ) if "risk_level" in df else 0
+
+    # -----------------------------------------------------
+    # FINAL REPORT
+    # -----------------------------------------------------
+
     report = {
 
-        "metadata":
-            build_metadata(df),
+        "metadata": {
 
-        "threats":
+            "generated_at": (
+
+                datetime.now()
+                .strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+            ),
+
+            "total_flows": (
+                total_flows
+            ),
+
+            "normal_flows": (
+                normal_flows
+            ),
+
+            "anomalous_flows": (
+                anomalous_flows
+            ),
+
+            "high_risk_flows": (
+                high_risk
+            ),
+
+            "medium_risk_flows": (
+                medium_risk
+            ),
+
+            "low_risk_flows": (
+                low_risk
+            )
+        },
+
+        "threats": (
             build_threat_objects(df)
+        )
     }
 
     return report
@@ -259,7 +401,58 @@ def build_report(df):
 
 def save_report(report):
 
-    with open(report_path, "w") as f:
+    # -----------------------------------------------------
+    # EXISTING REPORT
+    # -----------------------------------------------------
+
+    if os.path.exists(
+        report_path
+    ):
+
+        with open(
+            report_path,
+            "r"
+        ) as f:
+
+            existing_report = json.load(f)
+
+        existing_threats = (
+            existing_report.get(
+                "threats",
+                []
+            )
+        )
+
+        new_threats = report.get(
+            "threats",
+            []
+        )
+
+        combined_threats = (
+
+            existing_threats
+            +
+            new_threats
+        )
+
+        report["threats"] = (
+            combined_threats
+        )
+
+        report["metadata"][
+            "total_flows"
+        ] = len(
+            combined_threats
+        )
+
+    # -----------------------------------------------------
+    # SAVE UPDATED REPORT
+    # -----------------------------------------------------
+
+    with open(
+        report_path,
+        "w"
+    ) as f:
 
         json.dump(
             report,
@@ -268,8 +461,8 @@ def save_report(report):
         )
 
     print(
-        "\n[SUCCESS] Threat intelligence "
-        f"report saved:\n{report_path}"
+        f"\n[SUCCESS] Threat report updated:"
+        f"\n{report_path}"
     )
 
 
@@ -279,39 +472,41 @@ def save_report(report):
 
 def display_summary(report):
 
-    metadata = report["metadata"]
-
-    print("\n==============================")
-    print(" THREAT INTELLIGENCE SUMMARY ")
-    print("==============================")
+    metadata = report[
+        "metadata"
+    ]
 
     print(
-        f"\nGenerated At : "
-        f"{metadata['generated_at']}"
+        "\n=== THREAT REPORT SUMMARY ==="
     )
 
     print(
-        f"Total Flows : "
+        f"\nTotal Flows: "
         f"{metadata['total_flows']}"
     )
 
     print(
-        f"Detected Anomalies : "
-        f"{metadata['detected_anomalies']}"
+        f"Normal Flows: "
+        f"{metadata['normal_flows']}"
     )
 
     print(
-        f"HIGH Risk Flows : "
+        f"Anomalous Flows: "
+        f"{metadata['anomalous_flows']}"
+    )
+
+    print(
+        f"\nHIGH Risk: "
         f"{metadata['high_risk_flows']}"
     )
 
     print(
-        f"MEDIUM Risk Flows : "
+        f"MEDIUM Risk: "
         f"{metadata['medium_risk_flows']}"
     )
 
     print(
-        f"LOW Risk Flows : "
+        f"LOW Risk: "
         f"{metadata['low_risk_flows']}"
     )
 
@@ -327,14 +522,40 @@ def main():
         "INTELLIGENCE REPORT ==="
     )
 
+    # -----------------------------------------------------
+    # LOAD RESULTS
+    # -----------------------------------------------------
+
     df = load_results()
 
-    report = build_report(df)
+    # -----------------------------------------------------
+    # BUILD REPORT
+    # -----------------------------------------------------
 
-    save_report(report)
+    report = build_report(
+        df
+    )
 
-    display_summary(report)
+    # -----------------------------------------------------
+    # SAVE REPORT
+    # -----------------------------------------------------
 
+    save_report(
+        report
+    )
+
+    # -----------------------------------------------------
+    # DISPLAY SUMMARY
+    # -----------------------------------------------------
+
+    display_summary(
+        report
+    )
+
+
+# =========================================================
+# ENTRY POINT
+# =========================================================
 
 if __name__ == "__main__":
     main()
