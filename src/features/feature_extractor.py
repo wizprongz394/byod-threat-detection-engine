@@ -200,12 +200,158 @@ def extract_features(flows, attack_type):
         in attack_type.lower()
         else 1
     )
+    # ---------------------------------------------
+    # SESSION GROUPING
+    # ---------------------------------------------
+
+    session_groups = {}
+
+    for flow in flows:
+
+        session_id = flow.get(
+            "session_id"
+        )
+
+        if session_id not in session_groups:
+
+            session_groups[
+                session_id
+            ] = []
+
+        session_groups[
+            session_id
+        ].append(flow)
+
+
 
     for flow in flows:
 
         features = compute_features(
             flow
         )
+        # -----------------------------------------
+        # SESSION INTELLIGENCE
+        # -----------------------------------------
+
+        session_id = flow.get(
+            "session_id"
+        )
+
+        session_flows = (
+            session_groups[
+                session_id
+            ]
+        )
+
+        # SESSION FLOW COUNT
+
+        session_flow_count = len(
+            session_flows
+        )
+
+        # SESSION DURATION
+
+        session_start = min(
+            f["start_time"]
+            for f in session_flows
+        )
+
+        session_end = max(
+            f["end_time"]
+            for f in session_flows
+        )
+
+        session_duration = (
+            session_end
+            - session_start
+        )
+       
+        # -----------------------------------------
+        # FLOW TIMING ANALYSIS
+        # -----------------------------------------
+
+        flow_start_times = sorted(
+
+            f["start_time"]
+
+            for f in session_flows
+        )
+
+        # FLOW GAPS
+
+        if len(flow_start_times) > 1:
+
+            flow_gaps = np.diff(
+                flow_start_times
+            )
+
+            average_flow_gap = np.mean(
+                flow_gaps
+            )
+
+            flow_gap_variance = np.var(
+                flow_gaps
+            )
+
+        else:
+
+            average_flow_gap = 0
+
+            flow_gap_variance = 0
+
+
+
+        # SESSION TOTAL PACKETS
+
+        session_total_packets = sum(
+
+            len(f["packets"])
+
+            for f in session_flows
+        )
+
+        # SESSION TOTAL BYTES
+
+        session_total_bytes = sum(
+
+            sum(
+                p["length"]
+                for p in f["packets"]
+            )
+
+            for f in session_flows
+        )
+
+        # STORE SESSION FEATURES
+
+        features["session_id"] = (
+            session_id
+        )
+
+        features[
+            "session_flow_count"
+        ] = session_flow_count
+
+        features[
+            "session_duration"
+        ] = session_duration
+
+        features[
+            "session_total_packets"
+        ] = session_total_packets
+
+        features[
+            "session_total_bytes"
+        ] = session_total_bytes
+        features[
+            "average_flow_gap"
+        ] = average_flow_gap
+
+        features[
+            "flow_gap_variance"
+        ] = flow_gap_variance
+
+
 
         # LABELS
 

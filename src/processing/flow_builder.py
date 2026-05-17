@@ -1,14 +1,25 @@
 FLOW_TIMEOUT = 60  # seconds
 
+
 def build_flows(packets):
 
     flows = []
 
     active_flows = {}
 
+    # -----------------------------------------------------
+    # SESSION TRACKING
+    # -----------------------------------------------------
+
+    session_map = {}
+
+    session_counter = 0
+
     flow_id = 0
 
+    # -----------------------------------------------------
     # SORT PACKETS BY TIME
+    # -----------------------------------------------------
 
     packets = sorted(
         packets,
@@ -19,7 +30,9 @@ def build_flows(packets):
         )
     )
 
+    # -----------------------------------------------------
     # PROCESS EACH PACKET
+    # -----------------------------------------------------
 
     for pkt in packets:
 
@@ -33,7 +46,9 @@ def build_flows(packets):
 
         current_time = pkt.get("timestamp")
 
+        # -------------------------------------------------
         # SKIP INVALID PACKETS
+        # -------------------------------------------------
 
         if (
             src_ip is None
@@ -42,7 +57,9 @@ def build_flows(packets):
         ):
             continue
 
-        # Ensures:A ↔ B = same flow
+        # -------------------------------------------------
+        # BIDIRECTIONAL FLOW NORMALIZATION
+        # -------------------------------------------------
 
         if (src_ip, src_port) <= (dst_ip, dst_port):
 
@@ -60,9 +77,11 @@ def build_flows(packets):
             source_port = dst_port
             destination_port = src_port
 
-        #  CONTEXT-AWARE FLOW KEY
+        # -------------------------------------------------
+        # FLOW KEY
+        # -------------------------------------------------
 
-        key = (
+        flow_key = (
 
             source_ip,
             destination_ip,
@@ -73,13 +92,45 @@ def build_flows(packets):
             protocol
         )
 
+        # -------------------------------------------------
+        # SESSION KEY
+        # -------------------------------------------------
+
+        session_key = (
+
+            source_ip,
+            destination_ip,
+
+            protocol
+        )
+
+        # -------------------------------------------------
+        # SESSION CREATION
+        # -------------------------------------------------
+
+        if session_key not in session_map:
+
+            session_map[session_key] = (
+                f"session_{session_counter}"
+            )
+
+            session_counter += 1
+
+        session_id = session_map[
+            session_key
+        ]
+
+        # -------------------------------------------------
         # CREATE NEW FLOW
+        # -------------------------------------------------
 
-        if key not in active_flows:
+        if flow_key not in active_flows:
 
-            active_flows[key] = {
+            active_flows[flow_key] = {
 
                 "flow_id": flow_id,
+
+                "session_id": session_id,
 
                 "source_ip": source_ip,
                 "destination_ip": destination_ip,
@@ -96,9 +147,11 @@ def build_flows(packets):
 
             flow_id += 1
 
-        flow = active_flows[key]
+        flow = active_flows[flow_key]
 
+        # -------------------------------------------------
         # FLOW TIMEOUT SPLITTING
+        # -------------------------------------------------
 
         if (
             current_time - flow["last_seen"]
@@ -109,7 +162,14 @@ def build_flows(packets):
 
                 "flow_id": flow["flow_id"],
 
-                "source_ip": flow["source_ip"],
+                "session_id": flow[
+                    "session_id"
+                ],
+
+                "source_ip": flow[
+                    "source_ip"
+                ],
+
                 "destination_ip": flow[
                     "destination_ip"
                 ],
@@ -122,9 +182,13 @@ def build_flows(packets):
                     "destination_port"
                 ],
 
-                "protocol": flow["protocol"],
+                "protocol": flow[
+                    "protocol"
+                ],
 
-                "packets": flow["packets"],
+                "packets": flow[
+                    "packets"
+                ],
 
                 "start_time": flow[
                     "packets"
@@ -135,11 +199,15 @@ def build_flows(packets):
                 ][-1]["timestamp"]
             })
 
-            # CREATE NEW FLOW SESSION
+            # ---------------------------------------------
+            # CREATE NEW FLOW INSTANCE
+            # ---------------------------------------------
 
-            active_flows[key] = {
+            active_flows[flow_key] = {
 
                 "flow_id": flow_id,
+
+                "session_id": session_id,
 
                 "source_ip": source_ip,
                 "destination_ip": destination_ip,
@@ -156,9 +224,13 @@ def build_flows(packets):
 
             flow_id += 1
 
-            flow = active_flows[key]
+            flow = active_flows[
+                flow_key
+            ]
 
-        # STORE PACKET INSIDE FLOW
+        # -------------------------------------------------
+        # STORE PACKET
+        # -------------------------------------------------
 
         flow["packets"].append({
 
@@ -175,11 +247,15 @@ def build_flows(packets):
             "protocol": pkt.get("protocol")
         })
 
+        # -------------------------------------------------
         # UPDATE LAST SEEN
+        # -------------------------------------------------
 
         flow["last_seen"] = current_time
 
+    # -----------------------------------------------------
     # FLUSH REMAINING FLOWS
+    # -----------------------------------------------------
 
     for flow in active_flows.values():
 
@@ -189,7 +265,14 @@ def build_flows(packets):
 
                 "flow_id": flow["flow_id"],
 
-                "source_ip": flow["source_ip"],
+                "session_id": flow[
+                    "session_id"
+                ],
+
+                "source_ip": flow[
+                    "source_ip"
+                ],
+
                 "destination_ip": flow[
                     "destination_ip"
                 ],
@@ -202,9 +285,13 @@ def build_flows(packets):
                     "destination_port"
                 ],
 
-                "protocol": flow["protocol"],
+                "protocol": flow[
+                    "protocol"
+                ],
 
-                "packets": flow["packets"],
+                "packets": flow[
+                    "packets"
+                ],
 
                 "start_time": flow[
                     "packets"

@@ -293,6 +293,71 @@ def classify_risk(score):
 
         return "HIGH"
 
+def apply_session_escalation(df):
+
+    # ---------------------------------------------
+    # GROUP BY SESSION
+    # ---------------------------------------------
+
+    session_groups = df.groupby(
+        "session_id"
+    )
+
+    # ---------------------------------------------
+    # PROCESS EACH SESSION
+    # ---------------------------------------------
+
+    for session_id, group in session_groups:
+
+        avg_risk = group[
+            "risk_score"
+        ].mean()
+
+        flow_count = len(group)
+
+        # -----------------------------------------
+        # ESCALATION CONDITION
+        # -----------------------------------------
+
+        if (
+
+            flow_count >= 3
+
+            and
+
+            avg_risk >= 0.6
+        ):
+
+            # Escalate all flows
+            # inside session
+
+            df.loc[
+
+                df["session_id"]
+                == session_id,
+
+                "risk_level"
+
+            ] = "HIGH"
+
+            # Add escalation note
+
+            df.loc[
+
+                df["session_id"]
+                == session_id,
+
+                "risk_reason"
+
+            ] += (
+
+                " | Repeated suspicious "
+                "session behavior detected"
+            )
+
+    return df
+
+
 
 # EXPLAINABILITY ENGINE
 
@@ -354,6 +419,83 @@ def explain_risk(row):
         reasons.append(
             "Unusually high data transfer rate"
         )
+    # -----------------------------------------
+    # BEACONING-LIKE PATTERN
+    # -----------------------------------------
+
+    if (
+
+        row["session_flow_count"] >= 3
+
+        and
+
+        row["flow_gap_variance"] < 5
+
+        and
+
+        row["interval_entropy"] > 0.5
+    ):
+
+        reasons.append(
+
+            "Persistent periodic communication "
+            "behavior observed"
+
+        )
+
+        reasons.append(
+
+            "Possible beaconing activity detected"
+        )
+
+    # -----------------------------------------
+    # EXFILTRATION-LIKE PATTERN
+    # -----------------------------------------
+
+    if (
+
+        row["byte_rate"] > 100000
+
+        and
+
+        row["session_total_bytes"] > 50000
+
+        and
+
+        row["packets_per_second"] > 50
+    ):
+
+        reasons.append(
+
+            "Sustained elevated transfer "
+            "behavior detected"
+        )
+
+        reasons.append(
+
+            "Potential data exfiltration "
+            "pattern observed"
+        )
+
+    # -----------------------------------------
+    # IRREGULAR BURST BEHAVIOR
+    # -----------------------------------------
+
+    if (
+
+        row["burst_ratio"] > 5
+
+        and
+
+        row["flow_gap_variance"] > 10
+    ):
+
+        reasons.append(
+
+            "Irregular burst communication "
+            "pattern observed"
+        )
+
 
     # FALLBACK
 
@@ -474,6 +616,7 @@ def add_risk_levels(df):
         df["risk_score"]
         .apply(classify_risk)
     )
+    df = apply_session_escalation(df)
 
     # BEHAVIOR SUMMARY
 
