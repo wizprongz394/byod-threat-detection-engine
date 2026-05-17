@@ -6,9 +6,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 
-# =========================================================
 # PATH CONFIGURATION
-# =========================================================
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
@@ -39,9 +37,7 @@ os.makedirs(
 )
 
 
-# =========================================================
 # LOAD DATASET
-# =========================================================
 
 def load_data():
 
@@ -64,44 +60,51 @@ def load_data():
     return df
 
 
-# =========================================================
 # PREPARE FEATURES
-# =========================================================
 
 def prepare_data(df):
 
-    # -----------------------------------------------------
     # REMOVE NON-NUMERIC COLUMNS
-    # -----------------------------------------------------
 
     X = df.drop(
         columns=[
+
             "label",
-            "attack_type"
+            "attack_type",
+
+            "source_ip",
+            "destination_ip",
+
+            "source_port",
+            "destination_port",
+
+            "protocol"
         ],
         errors="ignore"
     )
 
-    # -----------------------------------------------------
     # TRAIN ONLY ON NORMAL TRAFFIC
-    # -----------------------------------------------------
 
     X_train = df[
         df["label"] == 0
     ].drop(
         columns=[
+
             "label",
-            "attack_type"
+            "attack_type",
+
+            "source_ip",
+            "destination_ip",
+
+            "source_port",
+            "destination_port",
+
+            "protocol"
         ],
         errors="ignore"
     )
 
-    # -----------------------------------------------------
-    # FALLBACK SAFETY
-    # -----------------------------------------------------
-
-    # If no normal traffic exists,
-    # fallback to entire dataset.
+    # FALLBACK SAFETY If no normal traffic exists, fallback to entire dataset.
 
     if len(X_train) == 0:
 
@@ -119,25 +122,19 @@ def prepare_data(df):
     return X, X_train
 
 
-# =========================================================
-# SCALE FEATURES
-# =========================================================
+#  SCALE FEATURES
 
 def scale_data(X, X_train):
 
     scaler = StandardScaler()
 
-    # -----------------------------------------------------
     # FIT ONLY ON TRAINING DATA
-    # -----------------------------------------------------
 
     X_train_scaled = scaler.fit_transform(
         X_train
     )
 
-    # -----------------------------------------------------
     # TRANSFORM FULL DATASET
-    # -----------------------------------------------------
 
     X_scaled = scaler.transform(
         X
@@ -154,9 +151,7 @@ def scale_data(X, X_train):
     )
 
 
-# =========================================================
 # TRAIN MODEL
-# =========================================================
 
 def train_model(X_train_scaled):
 
@@ -179,33 +174,20 @@ def train_model(X_train_scaled):
     return model
 
 
-# =========================================================
 # GENERATE PREDICTIONS
-# =========================================================
 
 def predict(model, X_scaled, df):
 
-    # -----------------------------------------------------
     # RAW PREDICTIONS
-    # -----------------------------------------------------
 
     predictions = model.predict(
         X_scaled
     )
 
-    # -----------------------------------------------------
     # CONVERT OUTPUT
-    # -----------------------------------------------------
 
-    # Isolation Forest:
-    #
-    #  1  -> normal
-    # -1 -> anomaly
-    #
-    # Convert into:
-    #
-    # 0 -> normal
-    # 1 -> anomaly
+    # Isolation Forest:  1  -> normal -1 -> anomaly
+    # Convert into: 0 -> normal 1 -> anomaly
 
     mapped_predictions = [
 
@@ -214,17 +196,13 @@ def predict(model, X_scaled, df):
         for prediction in predictions
     ]
 
-    # -----------------------------------------------------
     # SAFE ASSIGNMENT
-    # -----------------------------------------------------
 
     df["prediction"] = (
         mapped_predictions
     )
 
-    # -----------------------------------------------------
-    # VALIDATION
-    # -----------------------------------------------------
+    #  VALIDATION
 
     missing_predictions = (
 
@@ -249,9 +227,7 @@ def predict(model, X_scaled, df):
     return df
 
 
-# =========================================================
 # ADD RISK SCORES
-# =========================================================
 
 def add_risk_scores(
     model,
@@ -259,26 +235,19 @@ def add_risk_scores(
     df
 ):
 
-    # -----------------------------------------------------
     # RAW ANOMALY SCORES
-    # -----------------------------------------------------
 
     scores = model.decision_function(
         X_scaled
     )
 
-    # -----------------------------------------------------
     # INVERT SCORES
-    # -----------------------------------------------------
 
-    # Lower score = more anomalous
-    # So invert.
+    # Lower score = more anomalous So invert.
 
     scores_inverted = -scores
 
-    # -----------------------------------------------------
     # NORMALIZE
-    # -----------------------------------------------------
 
     min_score = np.min(
         scores_inverted
@@ -308,9 +277,7 @@ def add_risk_scores(
     return df
 
 
-# =========================================================
 # RISK CLASSIFICATION
-# =========================================================
 
 def classify_risk(score):
 
@@ -327,17 +294,13 @@ def classify_risk(score):
         return "HIGH"
 
 
-# =========================================================
 # EXPLAINABILITY ENGINE
-# =========================================================
 
 def explain_risk(row):
 
     reasons = []
 
-    # -----------------------------------------------------
     # INTERVAL ENTROPY
-    # -----------------------------------------------------
 
     if row.get(
         "interval_entropy",
@@ -348,9 +311,7 @@ def explain_risk(row):
             "Highly irregular timing behavior detected"
         )
 
-    # -----------------------------------------------------
     # BURST RATIO
-    # -----------------------------------------------------
 
     if row.get(
         "burst_ratio",
@@ -361,9 +322,7 @@ def explain_risk(row):
             "Burst communication behavior observed"
         )
 
-    # -----------------------------------------------------
     # PACKET RATE
-    # -----------------------------------------------------
 
     if row.get(
         "packets_per_second",
@@ -374,9 +333,7 @@ def explain_risk(row):
             "Elevated packet transmission rate"
         )
 
-    # -----------------------------------------------------
     # SIZE VARIANCE
-    # -----------------------------------------------------
 
     if row.get(
         "size_variance",
@@ -387,9 +344,7 @@ def explain_risk(row):
             "Abnormal packet size variation detected"
         )
 
-    # -----------------------------------------------------
     # BYTE RATE
-    # -----------------------------------------------------
 
     if row.get(
         "byte_rate",
@@ -400,9 +355,7 @@ def explain_risk(row):
             "Unusually high data transfer rate"
         )
 
-    # -----------------------------------------------------
     # FALLBACK
-    # -----------------------------------------------------
 
     if not reasons:
 
@@ -413,9 +366,7 @@ def explain_risk(row):
     return reasons
 
 
-# =========================================================
 # THREAT CATEGORY ENGINE
-# =========================================================
 
 def categorize_threat(reasons):
 
@@ -450,9 +401,7 @@ def categorize_threat(reasons):
         )
 
 
-# =========================================================
 # POLICY ENGINE
-# =========================================================
 
 def suggest_action(risk_level):
 
@@ -478,9 +427,7 @@ def suggest_action(risk_level):
         )
 
 
-# =========================================================
 # POLICY ACTION
-# =========================================================
 
 def determine_policy_action(
     risk_level
@@ -499,9 +446,7 @@ def determine_policy_action(
         return "IGNORE"
 
 
-# =========================================================
 # ANOMALY STRENGTH
-# =========================================================
 
 def estimate_confidence(score):
 
@@ -518,15 +463,11 @@ def estimate_confidence(score):
         return "LOW"
 
 
-# =========================================================
 # ADD RISK LAYERS
-# =========================================================
 
 def add_risk_levels(df):
 
-    # -----------------------------------------------------
     # RISK LEVEL
-    # -----------------------------------------------------
 
     df["risk_level"] = (
 
@@ -534,9 +475,7 @@ def add_risk_levels(df):
         .apply(classify_risk)
     )
 
-    # -----------------------------------------------------
     # BEHAVIOR SUMMARY
-    # -----------------------------------------------------
 
     df["behavior_summary"] = (
 
@@ -546,9 +485,7 @@ def add_risk_levels(df):
         )
     )
 
-    # -----------------------------------------------------
     # THREAT CATEGORY
-    # -----------------------------------------------------
 
     df["threat_category"] = (
 
@@ -556,9 +493,7 @@ def add_risk_levels(df):
         .apply(categorize_threat)
     )
 
-    # -----------------------------------------------------
     # POLICY ACTION
-    # -----------------------------------------------------
 
     df["policy_action"] = (
 
@@ -566,9 +501,7 @@ def add_risk_levels(df):
         .apply(determine_policy_action)
     )
 
-    # -----------------------------------------------------
     # SUGGESTED ACTION
-    # -----------------------------------------------------
 
     df["suggested_action"] = (
 
@@ -576,9 +509,7 @@ def add_risk_levels(df):
         .apply(suggest_action)
     )
 
-    # -----------------------------------------------------
     # ANOMALY STRENGTH
-    # -----------------------------------------------------
 
     df["anomaly_strength"] = (
 
@@ -589,9 +520,7 @@ def add_risk_levels(df):
     return df
 
 
-# =========================================================
 # EVALUATION
-# =========================================================
 
 def evaluate(df):
 
@@ -626,9 +555,7 @@ def evaluate(df):
     )
 
 
-# =========================================================
 # SAVE RESULTS
-# =========================================================
 
 def save_results(df):
 
@@ -680,9 +607,7 @@ def save_results(df):
         )
 
 
-# =========================================================
 # MAIN
-# =========================================================
 
 def main():
 
@@ -690,23 +615,17 @@ def main():
         "\n========== MODEL PIPELINE =========="
     )
 
-    # -----------------------------------------------------
     # LOAD DATA
-    # -----------------------------------------------------
 
     df = load_data()
 
-    # -----------------------------------------------------
     # PREPARE FEATURES
-    # -----------------------------------------------------
 
     X, X_train = prepare_data(
         df
     )
 
-    # -----------------------------------------------------
     # SCALE DATA
-    # -----------------------------------------------------
 
     (
         X_scaled,
@@ -718,17 +637,13 @@ def main():
         X_train
     )
 
-    # -----------------------------------------------------
     # TRAIN MODEL
-    # -----------------------------------------------------
 
     model = train_model(
         X_train_scaled
     )
 
-    # -----------------------------------------------------
     # PREDICTIONS
-    # -----------------------------------------------------
 
     df = predict(
         model,
@@ -736,9 +651,7 @@ def main():
         df
     )
 
-    # -----------------------------------------------------
     # RISK ENGINE
-    # -----------------------------------------------------
 
     df = add_risk_scores(
         model,
@@ -750,22 +663,16 @@ def main():
         df
     )
 
-    # -----------------------------------------------------
     # EVALUATE
-    # -----------------------------------------------------
 
     evaluate(df)
 
-    # -----------------------------------------------------
     # SAVE
-    # -----------------------------------------------------
 
     save_results(df)
 
 
-# =========================================================
 # ENTRY POINT
-# =========================================================
 
 if __name__ == "__main__":
     main()

@@ -1,46 +1,56 @@
 import pyshark
 import os
 
+
 # CONFIGURATION
 
-DEFAULT_TSHARK_PATH = r"C:\Program Files\Wireshark\tshark.exe"
+DEFAULT_TSHARK_PATH = (
+    r"C:\Program Files\Wireshark\tshark.exe"
+)
+
 
 # PCAP READER
 
 def read_pcap(file_path, tshark_path=None):
     """
     Reads a PCAP/PCAPNG file using PyShark
-    and extracts structured packet information.
+    and returns normalized packet dictionaries.
 
-    Parameters:
+    Parameters
+    ----------
     file_path : str
-    Path to the PCAP file
+        Path to PCAP/PCAPNG file
 
     tshark_path : str
-    Custom tshark executable path
+        Optional custom tshark executable path
 
-    Returns:
-
+    Returns
+    -------
     list
-        List of packet dictionaries
+        List of normalized packet objects
     """
 
     # VALIDATION
 
     if not os.path.exists(file_path):
+
         raise FileNotFoundError(
             f"[ERROR] PCAP file not found: {file_path}"
         )
 
-    # custom tshark path 
-    if tshark_path:
-        tshark_executable = tshark_path
-    else:
-        tshark_executable = DEFAULT_TSHARK_PATH
+    # CUSTOM TSHARK PATH
+
+    tshark_executable = (
+        tshark_path
+        if tshark_path
+        else DEFAULT_TSHARK_PATH
+    )
 
     if not os.path.exists(tshark_executable):
+
         raise FileNotFoundError(
-        f"[ERROR] tshark not found: {tshark_executable}"
+            f"[ERROR] tshark not found: "
+            f"{tshark_executable}"
         )
 
     # CREATE CAPTURE
@@ -60,41 +70,77 @@ def read_pcap(file_path, tshark_path=None):
         for pkt in capture:
 
             try:
-                #  HANDLE IPv4 / IPv6
 
-                if hasattr(pkt, "ip"):
+                # DEFAULT SAFE VALUES
 
-                    src_ip = pkt.ip.src
-                    dst_ip = pkt.ip.dst
-
-                elif hasattr(pkt, "ipv6"):
-
-                    src_ip = pkt.ipv6.src
-                    dst_ip = pkt.ipv6.dst
-
-                else:
-                    continue
-
-                #  METADATA
-
-                timestamp = float(pkt.sniff_timestamp)
-
-                length = int(pkt.length)
-
-                # PROTOCOL
-
-                protocol = (
-                    pkt.transport_layer
-                    if hasattr(pkt, "transport_layer")
-                    else None
-                )
+                src_ip = None
+                dst_ip = None
 
                 src_port = None
                 dst_port = None
 
-                # PORT EXTRACTION
+                protocol = None
 
-                if protocol:
+                timestamp = None
+                length = None
+
+                # TIMESTAMP
+
+                try:
+                    timestamp = float(
+                        pkt.sniff_timestamp
+                    )
+
+                except Exception:
+                    timestamp = None
+
+                # PACKET LENGTH
+
+                try:
+                    length = int(pkt.length)
+
+                except Exception:
+                    length = None
+
+                # IPv4 / IPv6 EXTRACTION
+
+                if hasattr(pkt, "ip"):
+
+                    try:
+                        src_ip = pkt.ip.src
+                        dst_ip = pkt.ip.dst
+
+                    except Exception:
+                        pass
+
+                elif hasattr(pkt, "ipv6"):
+
+                    try:
+                        src_ip = pkt.ipv6.src
+                        dst_ip = pkt.ipv6.dst
+
+                    except Exception:
+                        pass
+
+                # PROTOCOL EXTRACTION
+
+                try:
+
+                    protocol = (
+                        pkt.transport_layer
+                        if hasattr(
+                            pkt,
+                            "transport_layer"
+                        )
+                        else None
+                    )
+
+                except Exception:
+                    protocol = None
+
+                # PORT EXTRACTION ONLY FOR TCP / UDP
+
+                if protocol in ["TCP", "UDP"]:
 
                     try:
 
@@ -112,37 +158,45 @@ def read_pcap(file_path, tshark_path=None):
                             None
                         )
 
-                    except:
-                        pass
+                        # Convert safely to int
 
-                # STORE PACKET
+                        src_port = (
+                            int(src_port)
+                            if src_port
+                            else None
+                        )
+
+                        dst_port = (
+                            int(dst_port)
+                            if dst_port
+                            else None
+                        )
+
+                    except Exception:
+
+                        src_port = None
+                        dst_port = None
+
+                # NORMALIZED PACKET OBJECT
 
                 packet_obj = {
-
-                    "src_ip": src_ip,
-                    "dst_ip": dst_ip,
 
                     "timestamp": timestamp,
 
                     "length": length,
 
-                    "protocol": protocol,
+                    "src_ip": src_ip,
+                    "dst_ip": dst_ip,
 
-                    "src_port": (
-                        int(src_port)
-                        if src_port
-                        else None
-                    ),
+                    "src_port": src_port,
+                    "dst_port": dst_port,
 
-                    "dst_port": (
-                        int(dst_port)
-                        if dst_port
-                        else None
-                    )
+                    "protocol": protocol
                 }
 
                 packets.append(packet_obj)
 
+            # Skip malformed packets safely
             except Exception:
                 continue
 

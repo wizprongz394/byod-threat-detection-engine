@@ -53,17 +53,24 @@ def compute_features(flow):
 
     if len(timestamps) > 1:
 
-        timestamps_sorted = sorted(timestamps)
+        timestamps_sorted = sorted(
+            timestamps
+        )
 
         intervals = np.diff(
             timestamps_sorted
         )
 
-        interval_mean = np.mean(intervals)
+        interval_mean = np.mean(
+            intervals
+        )
 
-        interval_variance = np.var(intervals)
+        interval_variance = np.var(
+            intervals
+        )
 
-        # Entropy
+        # ENTROPY
+
         hist, _ = np.histogram(
             intervals,
             bins=10
@@ -76,7 +83,9 @@ def compute_features(flow):
     else:
 
         interval_mean = 0
+
         interval_variance = 0
+
         interval_entropy = 0
 
     # SIZE FEATURES
@@ -117,6 +126,30 @@ def compute_features(flow):
 
     return {
 
+        # INTELLIGENCE METADATA
+
+        "source_ip": flow.get(
+            "source_ip"
+        ),
+
+        "destination_ip": flow.get(
+            "destination_ip"
+        ),
+
+        "source_port": flow.get(
+            "source_port"
+        ),
+
+        "destination_port": flow.get(
+            "destination_port"
+        ),
+
+        "protocol": flow.get(
+            "protocol"
+        ),
+
+        # BEHAVIORAL FEATURES
+
         "duration": duration,
 
         "total_bytes": total_bytes,
@@ -125,15 +158,25 @@ def compute_features(flow):
 
         "interval_mean": interval_mean,
 
-        "interval_variance": interval_variance,
+        "interval_variance": (
+            interval_variance
+        ),
 
-        "interval_entropy": interval_entropy,
+        "interval_entropy": (
+            interval_entropy
+        ),
 
-        "size_variance": size_variance,
+        "size_variance": (
+            size_variance
+        ),
 
-        "bytes_per_packet": bytes_per_packet,
+        "bytes_per_packet": (
+            bytes_per_packet
+        ),
 
-        "packets_per_second": packets_per_second,
+        "packets_per_second": (
+            packets_per_second
+        ),
 
         "byte_rate": byte_rate,
 
@@ -147,21 +190,28 @@ def extract_features(flows, attack_type):
 
     rows = []
 
-    # Labeling rule:
+    # LABELING RULE
     # 0 = normal
     # 1 = attack
 
     label = (
         0
-        if "normal" in attack_type.lower()
+        if "normal"
+        in attack_type.lower()
         else 1
     )
 
     for flow in flows:
 
-        features = compute_features(flow)
+        features = compute_features(
+            flow
+        )
 
-        features["attack_type"] = attack_type
+        # LABELS
+
+        features["attack_type"] = (
+            attack_type
+        )
 
         features["label"] = label
 

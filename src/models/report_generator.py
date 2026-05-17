@@ -7,7 +7,7 @@ import pandas as pd
 
 
 # =========================================================
-# PATH CONFIGURATION (PHASE 2 STABILIZATION)
+# PATH CONFIGURATION
 # =========================================================
 
 BASE_DIR = os.path.dirname(
@@ -39,8 +39,6 @@ report_path = os.path.join(
     THREAT_REPORT_FILE
 )
 
-# Ensure results directory exists
-
 os.makedirs(
     RESULTS_DIR,
     exist_ok=True
@@ -53,10 +51,6 @@ os.makedirs(
 
 def load_results():
 
-    # -----------------------------------------------------
-    # VALIDATE FILE
-    # -----------------------------------------------------
-
     if not os.path.exists(
         results_path
     ):
@@ -67,17 +61,9 @@ def load_results():
             f"not found:\n{results_path}"
         )
 
-    # -----------------------------------------------------
-    # LOAD CSV
-    # -----------------------------------------------------
-
     df = pd.read_csv(
         results_path
     )
-
-    # -----------------------------------------------------
-    # VALIDATION
-    # -----------------------------------------------------
 
     if len(df) == 0:
 
@@ -239,6 +225,43 @@ def build_threat_objects(df):
 
         threat = {
 
+            # =============================================
+            # NETWORK INTELLIGENCE
+            # =============================================
+
+            "source_ip": row.get(
+                "source_ip",
+                "UNKNOWN"
+            ),
+
+            "destination_ip": row.get(
+                "destination_ip",
+                "UNKNOWN"
+            ),
+
+            "source_port": safe_int(
+                row.get(
+                    "source_port",
+                    0
+                )
+            ),
+
+            "destination_port": safe_int(
+                row.get(
+                    "destination_port",
+                    0
+                )
+            ),
+
+            "protocol": row.get(
+                "protocol",
+                "UNKNOWN"
+            ),
+
+            # =============================================
+            # THREAT INTELLIGENCE
+            # =============================================
+
             "flow_id": int(idx),
 
             "prediction": prediction,
@@ -276,6 +299,10 @@ def build_threat_objects(df):
 
                 "MONITOR"
             ),
+
+            # =============================================
+            # BEHAVIORAL INTELLIGENCE
+            # =============================================
 
             "behavior_summary": (
                 behavior_summary
