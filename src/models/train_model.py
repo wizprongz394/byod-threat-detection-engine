@@ -60,64 +60,83 @@ def load_data():
     return df
 
 
-# PREPARE FEATURES
+# =========================================================
+# PREPARE ML DATA
+# =========================================================
 
 def prepare_data(df):
 
-    # REMOVE NON-NUMERIC COLUMNS
+    # =========================================
+    # NON-NUMERIC / METADATA COLUMNS
+    # =========================================
+
+    metadata_columns = [
+
+        "label",
+        "attack_type",
+
+        "session_id",
+
+        "source_ip",
+        "destination_ip",
+
+        "protocol"
+    ]
+
+    # REMOVE ONLY EXISTING COLUMNS
+
+    metadata_columns = [
+
+        col
+
+        for col in metadata_columns
+
+        if col in df.columns
+    ]
+
+    # =========================================
+    # ML FEATURE MATRIX
+    # =========================================
 
     X = df.drop(
-        columns=[
-
-            "label",
-            "attack_type",
-
-            "source_ip",
-            "destination_ip",
-
-            "source_port",
-            "destination_port",
-
-            "protocol"
-        ],
-        errors="ignore"
+        columns=metadata_columns
     )
 
-    # TRAIN ONLY ON NORMAL TRAFFIC
+    # =========================================
+    # NORMAL-ONLY TRAINING
+    # =========================================
 
-    X_train = df[
+    normal_df = df[
         df["label"] == 0
-    ].drop(
-        columns=[
+    ]
 
-            "label",
-            "attack_type",
+    # FALLBACK IF NO NORMAL TRAFFIC
 
-            "source_ip",
-            "destination_ip",
-
-            "source_port",
-            "destination_port",
-
-            "protocol"
-        ],
-        errors="ignore"
-    )
-
-    # FALLBACK SAFETY If no normal traffic exists, fallback to entire dataset.
-
-    if len(X_train) == 0:
+    if normal_df.empty:
 
         print(
             "\n[WARNING] No normal traffic found."
         )
 
         print(
-            "[WARNING] Falling back to "
-            "full dataset for training."
+            "[WARNING] Falling back to full dataset for training."
         )
 
         X_train = X.copy()
+
+    else:
+
+        X_train = normal_df.drop(
+            columns=metadata_columns
+        )
+
+    # =========================================
+    # SAFETY CLEANING
+    # =========================================
+
+    X = X.fillna(0)
+
+    X_train = X_train.fillna(0)
 
     return X, X_train
 
@@ -361,11 +380,19 @@ def apply_session_escalation(df):
 
 # EXPLAINABILITY ENGINE
 
+# =========================================================
+# DESTINATION + BEHAVIORAL INTELLIGENCE ENGINE
+# =========================================================
+
 def explain_risk(row):
 
     reasons = []
 
-    # INTERVAL ENTROPY
+    # =====================================================
+    # BASIC BEHAVIORAL ANOMALIES
+    # =====================================================
+
+    # TIMING IRREGULARITY
 
     if row.get(
         "interval_entropy",
@@ -373,10 +400,11 @@ def explain_risk(row):
     ) > 1.5:
 
         reasons.append(
+
             "Highly irregular timing behavior detected"
         )
 
-    # BURST RATIO
+    # BURST COMMUNICATION
 
     if row.get(
         "burst_ratio",
@@ -384,10 +412,11 @@ def explain_risk(row):
     ) > 5:
 
         reasons.append(
+
             "Burst communication behavior observed"
         )
 
-    # PACKET RATE
+    # HIGH PACKET RATE
 
     if row.get(
         "packets_per_second",
@@ -395,10 +424,11 @@ def explain_risk(row):
     ) > 50:
 
         reasons.append(
-            "Elevated packet transmission rate"
+
+            "Elevated packet transmission rate detected"
         )
 
-    # SIZE VARIANCE
+    # PACKET SIZE IRREGULARITY
 
     if row.get(
         "size_variance",
@@ -406,10 +436,11 @@ def explain_risk(row):
     ) > 10000:
 
         reasons.append(
+
             "Abnormal packet size variation detected"
         )
 
-    # BYTE RATE
+    # HIGH BYTE TRANSFER RATE
 
     if row.get(
         "byte_rate",
@@ -417,30 +448,81 @@ def explain_risk(row):
     ) > 100000:
 
         reasons.append(
-            "Unusually high data transfer rate"
+
+            "Unusually high data transfer behavior detected"
         )
-    # -----------------------------------------
-    # BEACONING-LIKE PATTERN
-    # -----------------------------------------
+
+    # =====================================================
+    # SESSION INTELLIGENCE
+    # =====================================================
+
+    # REPEATED SESSION COMMUNICATION
+
+    if row.get(
+        "session_flow_count",
+        0
+    ) >= 5:
+
+        reasons.append(
+
+            "Persistent multi-flow communication session observed"
+        )
+
+    # LONG SESSION DURATION
+
+    if row.get(
+        "session_duration",
+        0
+    ) > 300:
+
+        reasons.append(
+
+            "Long-duration communication persistence detected"
+        )
+
+    # HIGH SESSION TRANSFER
+
+    if row.get(
+        "session_total_bytes",
+        0
+    ) > 50000:
+
+        reasons.append(
+
+            "Sustained high-volume session transfer observed"
+        )
+
+    # =====================================================
+    # TEMPORAL BEHAVIORAL INTELLIGENCE
+    # =====================================================
+
+    # PERIODIC COMMUNICATION
 
     if (
 
-        row["session_flow_count"] >= 3
+        row.get(
+            "session_flow_count",
+            0
+        ) >= 3
 
         and
 
-        row["flow_gap_variance"] < 5
+        row.get(
+            "flow_gap_variance",
+            999
+        ) < 5
 
         and
 
-        row["interval_entropy"] > 0.5
+        row.get(
+            "interval_entropy",
+            0
+        ) > 0.5
     ):
 
         reasons.append(
 
-            "Persistent periodic communication "
-            "behavior observed"
-
+            "Persistent periodic communication behavior observed"
         )
 
         reasons.append(
@@ -448,62 +530,201 @@ def explain_risk(row):
             "Possible beaconing activity detected"
         )
 
-    # -----------------------------------------
-    # EXFILTRATION-LIKE PATTERN
-    # -----------------------------------------
-
-    if (
-
-        row["byte_rate"] > 100000
-
-        and
-
-        row["session_total_bytes"] > 50000
-
-        and
-
-        row["packets_per_second"] > 50
-    ):
-
-        reasons.append(
-
-            "Sustained elevated transfer "
-            "behavior detected"
-        )
-
-        reasons.append(
-
-            "Potential data exfiltration "
-            "pattern observed"
-        )
-
-    # -----------------------------------------
     # IRREGULAR BURST BEHAVIOR
-    # -----------------------------------------
 
     if (
 
-        row["burst_ratio"] > 5
+        row.get(
+            "burst_ratio",
+            0
+        ) > 5
 
         and
 
-        row["flow_gap_variance"] > 10
+        row.get(
+            "flow_gap_variance",
+            0
+        ) > 10
     ):
 
         reasons.append(
 
-            "Irregular burst communication "
-            "pattern observed"
+            "Irregular burst communication pattern observed"
         )
 
+    # =====================================================
+    # EXFILTRATION-LIKE BEHAVIOR
+    # =====================================================
 
+    if (
+
+        row.get(
+            "byte_rate",
+            0
+        ) > 100000
+
+        and
+
+        row.get(
+            "session_total_bytes",
+            0
+        ) > 50000
+
+        and
+
+        row.get(
+            "packets_per_second",
+            0
+        ) > 50
+    ):
+
+        reasons.append(
+
+            "Sustained elevated transfer behavior detected"
+        )
+
+        reasons.append(
+
+            "Potential data exfiltration pattern observed"
+        )
+
+    # =====================================================
+    # DESTINATION INTELLIGENCE
+    # =====================================================
+
+    destination_observations = (
+
+        interpret_destination_behavior(
+            row
+        )
+    )
+
+    reasons.extend(
+        destination_observations
+    )
+
+    # =====================================================
+    # INTERNAL vs EXTERNAL AWARENESS
+    # =====================================================
+
+    source_ip = str(
+        row.get(
+            "source_ip",
+            ""
+        )
+    )
+
+    destination_ip = str(
+        row.get(
+            "destination_ip",
+            ""
+        )
+    )
+
+    # INTERNAL COMMUNICATION
+
+    if (
+
+        source_ip.startswith(
+            ("192.168.", "10.", "172.")
+        )
+
+        and
+
+        destination_ip.startswith(
+            ("192.168.", "10.", "172.")
+        )
+    ):
+
+        reasons.append(
+
+            "Internal network communication behavior observed"
+        )
+
+    # OUTBOUND EXTERNAL COMMUNICATION
+
+    if (
+
+        source_ip.startswith(
+            ("192.168.", "10.", "172.")
+        )
+
+        and
+
+        not destination_ip.startswith(
+            ("192.168.", "10.", "172.")
+        )
+    ):
+
+        reasons.append(
+
+            "Outbound communication toward external destination detected"
+        )
+
+    # =====================================================
+    # DESTINATION TARGETING ANALYSIS
+    # =====================================================
+
+    if row.get(
+        "repeated_destination_count",
+        0
+    ) >= 5:
+
+        reasons.append(
+
+            "Repeated communication toward specific destination observed"
+        )
+
+    if row.get(
+        "unique_destination_count",
+        0
+    ) >= 20:
+
+        reasons.append(
+
+            "High-volume multi-destination communication pattern detected"
+        )
+
+    # =====================================================
+    # CONFIDENCE REINFORCEMENT
+    # =====================================================
+
+    if (
+
+        row.get(
+            "risk_score",
+            0
+        ) >= 0.85
+
+        and
+
+        row.get(
+            "session_flow_count",
+            0
+        ) >= 3
+    ):
+
+        reasons.append(
+
+            "High-confidence anomalous behavioral pattern identified"
+        )
+
+    # =====================================================
     # FALLBACK
+    # =====================================================
 
     if not reasons:
 
         reasons.append(
+
             "Behavior within expected operational range"
         )
+
+    # REMOVE DUPLICATES
+
+    reasons = list(
+        dict.fromkeys(reasons)
+    )
 
     return reasons
 
@@ -567,6 +788,122 @@ def suggest_action(risk_level):
         return (
             "No immediate action required."
         )
+# DESTINATION BEHAVIOR INTERPRETER
+
+def interpret_destination_behavior(row):
+
+    observations = []
+
+    protocol = str(
+        row.get("protocol", "")
+    ).upper()
+
+    destination_port = row.get(
+        "destination_port"
+    )
+
+    session_flow_count = row.get(
+        "session_flow_count",
+        0
+    )
+
+    packets_per_second = row.get(
+        "packets_per_second",
+        0
+    )
+
+    byte_rate = row.get(
+        "byte_rate",
+        0
+    )
+
+    # =========================================
+    # HTTPS / ENCRYPTED TRAFFIC
+    # =========================================
+
+    if (
+        protocol == "TCP"
+        and destination_port == 443
+    ):
+
+        observations.append(
+
+            "Encrypted outbound communication observed"
+        )
+
+    # =========================================
+    # WEB TRAFFIC
+    # =========================================
+
+    if destination_port in [80, 443]:
+
+        observations.append(
+
+            "Web-based communication activity observed"
+        )
+
+    # =========================================
+    # DNS ACTIVITY
+    # =========================================
+
+    if destination_port == 53:
+
+        observations.append(
+
+            "DNS communication behavior detected"
+        )
+
+    # =========================================
+    # REMOTE ACCESS
+    # =========================================
+
+    if destination_port == 22:
+
+        observations.append(
+
+            "Remote shell communication behavior observed"
+        )
+
+    # =========================================
+    # HIGH UDP ACTIVITY
+    # =========================================
+
+    if (
+        protocol == "UDP"
+        and packets_per_second > 100
+    ):
+
+        observations.append(
+
+            "High-frequency UDP communication detected"
+        )
+
+    # =========================================
+    # PERSISTENT ENCRYPTED CALLBACKS
+    # =========================================
+
+    if (
+        destination_port == 443
+        and session_flow_count >= 5
+    ):
+
+        observations.append(
+
+            "Repeated outbound encrypted callbacks observed"
+        )
+
+    # =========================================
+    # HIGH TRANSFER BEHAVIOR
+    # =========================================
+
+    if byte_rate > 100000:
+
+        observations.append(
+
+            "Elevated outbound transfer behavior detected"
+        )
+
+    return observations
 
 
 # POLICY ACTION
@@ -661,6 +998,7 @@ def add_risk_levels(df):
     )
 
     return df
+
 
 
 # EVALUATION
