@@ -1,2 +1,3 @@
 pcap_file,traffic_class,attack_type,split,description
-data/benign_pcaps/benign_web_01.pcapng,benign,normal_web,train,"Normal web and application traffic captured over Wi-Fi"
+benign_web_01.pcapng,benign,none,train,Benign web traffic used to establish the normal training baseline
+benign_validation_01.pcapng,benign,none,validation,Independent benign traffic capture reserved for V3 development and validation
