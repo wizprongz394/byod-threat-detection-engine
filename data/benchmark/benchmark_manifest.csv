@@ -1,3 +1,13 @@
 pcap_file,traffic_class,attack_type,split,description
 benign_web_01.pcapng,benign,none,train,Benign web traffic used to establish the normal training baseline
 benign_validation_01.pcapng,benign,none,validation,Independent benign traffic capture reserved for V3 development and validation
+1_beacon_capture.pcapng,attack,beaconing,test,Periodic command-and-control beacon traffic
+2_dns_tunneling_capture.pcapng,attack,dns_tunneling,test,DNS tunneling traffic scenario
+3_exfiltration_capture.pcapng,attack,exfiltration,test,Potential data exfiltration traffic scenario
+4_lateral_scan_capture.pcapng,attack,lateral_scanning,test,Local network lateral scanning scenario
+5_jittered_beacon.pcapng,attack,jittered_beacon,test,Jittered command-and-control beacon traffic
+6_distributed_c2.pcapng,attack,distributed_c2,test,Distributed command-and-control traffic scenario
+7_spike.pcapng,attack,spike,test,Traffic spike anomaly scenario
+8_session_replays.pcapng,attack,session_replay,test,Repeated session replay traffic scenario
+9_stealth.pcapng,attack,stealth,test,Slow stealth communication scenario
+10_random.pcapng,attack,random_noise,test,Randomized traffic noise scenario
