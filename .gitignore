@@ -1,0 +1,12 @@
+# Raw network capture files
+*.pcap
+*.pcapng
+
+# Local benign traffic corpus
+data/benign_pcaps/
+
+# Generated/processed network data
+data/processed/
+
+# Generated results
+results/
