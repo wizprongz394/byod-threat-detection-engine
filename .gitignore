@@ -10,3 +10,7 @@ data/processed/
 
 # Generated results
 results/
+
+# Python cache files
+__pycache__/
+*.pyc

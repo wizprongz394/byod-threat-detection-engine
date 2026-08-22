@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 import pandas as pd
 
@@ -7,13 +8,18 @@ from scipy.stats import entropy
 from src.models.train_model import DATASET_PATH
 
 
-# CONFIGURATION
+# =========================================================
+# STABLE V2 CONFIGURATION
+# =========================================================
 
 RESULTS_DIR = "results"
 
 DATASET_FILE = "dataset.csv"
 
-os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(
+    RESULTS_DIR,
+    exist_ok=True
+)
 
 dataset_path = os.path.join(
     RESULTS_DIR,
@@ -21,7 +27,9 @@ dataset_path = os.path.join(
 )
 
 
+# =========================================================
 # FEATURE COMPUTATION
+# =========================================================
 
 def compute_features(flow):
 
@@ -37,7 +45,9 @@ def compute_features(flow):
         for p in packets
     ]
 
+    # -----------------------------------------------------
     # BASIC FEATURES
+    # -----------------------------------------------------
 
     duration = (
         max(timestamps) - min(timestamps)
@@ -49,7 +59,9 @@ def compute_features(flow):
 
     packet_count = len(packets)
 
+    # -----------------------------------------------------
     # INTERVAL FEATURES
+    # -----------------------------------------------------
 
     if len(timestamps) > 1:
 
@@ -69,7 +81,9 @@ def compute_features(flow):
             intervals
         )
 
-        # ENTROPY
+        # -------------------------------------------------
+        # INTERVAL ENTROPY
+        # -------------------------------------------------
 
         hist, _ = np.histogram(
             intervals,
@@ -88,7 +102,9 @@ def compute_features(flow):
 
         interval_entropy = 0
 
+    # -----------------------------------------------------
     # SIZE FEATURES
+    # -----------------------------------------------------
 
     size_variance = (
         np.var(sizes)
@@ -96,7 +112,9 @@ def compute_features(flow):
         else 0
     )
 
+    # -----------------------------------------------------
     # DERIVED FEATURES
+    # -----------------------------------------------------
 
     bytes_per_packet = (
         total_bytes / packet_count
@@ -122,7 +140,9 @@ def compute_features(flow):
         else 0
     )
 
+    # -----------------------------------------------------
     # FINAL FEATURE VECTOR
+    # -----------------------------------------------------
 
     return {
 
@@ -184,25 +204,29 @@ def compute_features(flow):
     }
 
 
-# FLOWS TO DATAFRAME
+# =========================================================
+# SHARED SESSION FEATURE BUILDER
+# =========================================================
+#
+# This contains the session-level feature construction
+# already used by Stable V2.
+#
+# It is kept separate so that V3.1 can use the same
+# behavioral representation without modifying the
+# Stable V2 extraction path.
+# =========================================================
 
-def extract_features(flows, attack_type):
+def _build_session_features(
+    flows,
+    attack_type,
+    label
+):
 
     rows = []
 
-    # LABELING RULE
-    # 0 = normal
-    # 1 = attack
-
-    label = (
-        0
-        if "normal"
-        in attack_type.lower()
-        else 1
-    )
-    # ---------------------------------------------
+    # -----------------------------------------------------
     # SESSION GROUPING
-    # ---------------------------------------------
+    # -----------------------------------------------------
 
     session_groups = {}
 
@@ -222,16 +246,19 @@ def extract_features(flows, attack_type):
             session_id
         ].append(flow)
 
-
+    # -----------------------------------------------------
+    # PROCESS FLOWS
+    # -----------------------------------------------------
 
     for flow in flows:
 
         features = compute_features(
             flow
         )
-        # -----------------------------------------
+
+        # -------------------------------------------------
         # SESSION INTELLIGENCE
-        # -----------------------------------------
+        # -------------------------------------------------
 
         session_id = flow.get(
             "session_id"
@@ -243,13 +270,17 @@ def extract_features(flows, attack_type):
             ]
         )
 
+        # -------------------------------------------------
         # SESSION FLOW COUNT
+        # -------------------------------------------------
 
         session_flow_count = len(
             session_flows
         )
 
+        # -------------------------------------------------
         # SESSION DURATION
+        # -------------------------------------------------
 
         session_start = min(
             f["start_time"]
@@ -265,10 +296,10 @@ def extract_features(flows, attack_type):
             session_end
             - session_start
         )
-       
-        # -----------------------------------------
+
+        # -------------------------------------------------
         # FLOW TIMING ANALYSIS
-        # -----------------------------------------
+        # -------------------------------------------------
 
         flow_start_times = sorted(
 
@@ -276,8 +307,6 @@ def extract_features(flows, attack_type):
 
             for f in session_flows
         )
-
-        # FLOW GAPS
 
         if len(flow_start_times) > 1:
 
@@ -299,9 +328,9 @@ def extract_features(flows, attack_type):
 
             flow_gap_variance = 0
 
-
-
+        # -------------------------------------------------
         # SESSION TOTAL PACKETS
+        # -------------------------------------------------
 
         session_total_packets = sum(
 
@@ -310,7 +339,9 @@ def extract_features(flows, attack_type):
             for f in session_flows
         )
 
+        # -------------------------------------------------
         # SESSION TOTAL BYTES
+        # -------------------------------------------------
 
         session_total_bytes = sum(
 
@@ -322,7 +353,9 @@ def extract_features(flows, attack_type):
             for f in session_flows
         )
 
+        # -------------------------------------------------
         # STORE SESSION FEATURES
+        # -------------------------------------------------
 
         features["session_id"] = (
             session_id
@@ -343,6 +376,7 @@ def extract_features(flows, attack_type):
         features[
             "session_total_bytes"
         ] = session_total_bytes
+
         features[
             "average_flow_gap"
         ] = average_flow_gap
@@ -351,9 +385,9 @@ def extract_features(flows, attack_type):
             "flow_gap_variance"
         ] = flow_gap_variance
 
-
-
-        # LABELS
+        # -------------------------------------------------
+        # GROUND TRUTH
+        # -------------------------------------------------
 
         features["attack_type"] = (
             attack_type
@@ -361,35 +395,145 @@ def extract_features(flows, attack_type):
 
         features["label"] = label
 
-        rows.append(features)
+        rows.append(
+            features
+        )
 
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(
+        rows
+    )
 
+    # -----------------------------------------------------
     # CLEAN WEAK FLOWS
+    # -----------------------------------------------------
 
-    df = df[
-        df["packet_count"] > 1
-    ]
+    if not df.empty:
 
-    df = df[
-        df["duration"] > 0
-    ]
+        df = df[
+            df["packet_count"] > 1
+        ]
+
+        df = df[
+            df["duration"] > 0
+        ]
 
     return df
 
 
-# SAVE DATASET
+# =========================================================
+# STABLE V2 FLOW → DATAFRAME
+# =========================================================
+
+def extract_features(
+    flows,
+    attack_type
+):
+
+    # -----------------------------------------------------
+    # STABLE V2 LABELING RULE
+    # -----------------------------------------------------
+    #
+    # Preserved exactly for the Stable V2 path.
+    #
+    # 0 = normal
+    # 1 = attack
+    # -----------------------------------------------------
+
+    label = (
+        0
+        if "normal"
+        in attack_type.lower()
+        else 1
+    )
+
+    return _build_session_features(
+        flows,
+        attack_type,
+        label
+    )
+
+
+# =========================================================
+# V3.1 BENCHMARK FEATURE EXTRACTION
+# =========================================================
+#
+# V3.1 does NOT infer ground truth from the PCAP filename.
+#
+# Ground truth comes from benchmark_manifest.csv:
+#
+# traffic_class = benign → label 0
+# traffic_class = attack → label 1
+#
+# This function also DOES NOT write to results/dataset.csv.
+#
+# The benchmark runner is responsible for deciding where
+# benchmark artifacts are stored.
+# =========================================================
+
+def extract_features_for_benchmark(
+    flows,
+    traffic_class,
+    attack_type
+):
+
+    # -----------------------------------------------------
+    # EXPLICIT BENCHMARK GROUND TRUTH
+    # -----------------------------------------------------
+
+    if traffic_class == "benign":
+
+        label = 0
+
+    elif traffic_class == "attack":
+
+        label = 1
+
+    else:
+
+        raise ValueError(
+            "Unsupported traffic class: "
+            f"{traffic_class}. "
+            "Expected 'benign' or 'attack'."
+        )
+
+    # -----------------------------------------------------
+    # REUSE THE SAME FEATURE REPRESENTATION
+    # -----------------------------------------------------
+
+    return _build_session_features(
+        flows,
+        attack_type,
+        label
+    )
+
+
+# =========================================================
+# STABLE V2 DATASET STORAGE
+# =========================================================
+#
+# IMPORTANT:
+#
+# This function remains unchanged for Stable V2.
+#
+# V3.1 must NOT call this function because it appends
+# benchmark data into the shared V2 results dataset.
+# =========================================================
 
 def save_dataset(df):
 
-    if os.path.exists(DATASET_PATH):
+    if os.path.exists(
+        DATASET_PATH
+    ):
 
         existing_df = pd.read_csv(
             DATASET_PATH
         )
 
         combined_df = pd.concat(
-            [existing_df, df],
+            [
+                existing_df,
+                df
+            ],
             ignore_index=True
         )
 
